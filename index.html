@@ -1,0 +1,1588 @@
+<title>Planificador VVF/VCF 9</title>
+<meta name="description" content="Capacity planning y costos de licenciamiento por-core de VMware vSphere Foundation y Cloud Foundation 9.x">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     TOKENS — consola de datacenter nocturna, inspirada en el
+     degradado azul→cian→verde de VMware by Broadcom.
+     Diseño deliberadamente de tema único (NOC/consola), como
+     el software de gestión que representa: fondo y colores se
+     declaran explícitos, sin depender de prefers-color-scheme.
+     ============================================================ */
+  :root{
+    --bg:            #060c1a;
+    --bg-grad-1:     #0a1730;
+    --bg-grad-2:     #071022;
+    --surface:       #0e1a30;
+    --surface-2:     #122542;
+    --surface-3:     #172c4d;
+    --border:        #1e3358;
+    --border-bright: #2d4d80;
+    --text:          #eaf1fb;
+    --text-dim:      #93a6c4;
+    --text-mute:     #5a6f92;
+
+    --accent:        #35c7f0;   /* cian principal, del degradado de marca */
+    --accent-2:      #7c6cff;   /* violeta secundario, para acentos de datos */
+    --accent-soft:   #35c7f01a;
+
+    --good:          #33d69f;   /* verde, del degradado de marca */
+    --good-soft:     #33d69f1a;
+    --warn:          #f4b740;
+    --warn-soft:     #f4b7401a;
+    --bad:           #ff5d72;
+    --bad-soft:      #ff5d721a;
+
+    --gold:          #f5b942;  /* color para inputs editables (entrada de usuario) */
+    --gold-soft:     #f5b9421a;
+
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    --font-display: 'Rajdhani', 'Arial Narrow', sans-serif;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Share Tech Mono', monospace;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ color-scheme: dark; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  h1,h2,h3{ font-family:var(--font-display); text-wrap:balance; }
+  ::selection{ background:var(--accent); color:#04101f; }
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:var(--bg); }
+  ::-webkit-scrollbar-thumb{ background:var(--border-bright); border-radius:99px; }
+  a{ color:var(--accent); }
+  button{ font-family:inherit; }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; transition-duration:0.001ms !important; }
+  }
+
+  /* ============================================================
+     BACKGROUND
+     ============================================================ */
+  .bg-scene{
+    position:fixed; inset:0; z-index:-1; overflow:hidden;
+    background:
+      radial-gradient(ellipse 1200px 700px at 15% -10%, #1c5fa833 0%, transparent 60%),
+      radial-gradient(ellipse 900px 600px at 100% 0%, #22d3ee22 0%, transparent 55%),
+      linear-gradient(180deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 45%, #050a16 100%);
+  }
+  .bg-scene svg{ position:absolute; bottom:-2vh; left:0; width:100%; height:42vh; opacity:0.5; }
+  .bg-grid{
+    position:absolute; inset:0;
+    background-image: linear-gradient(#ffffff08 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(180deg, black, transparent 70%);
+  }
+
+  /* ============================================================
+     TOPBAR
+     ============================================================ */
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    backdrop-filter: blur(14px) saturate(140%);
+    background: #081326cc;
+    border-bottom:1px solid var(--border);
+  }
+  .topbar-inner{
+    max-width:1440px; margin:0 auto; padding:14px 28px;
+    display:flex; align-items:center; gap:20px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .brand-mark{
+    width:42px; height:42px; border-radius:11px; flex-shrink:0;
+    background: linear-gradient(135deg, #1a6fd6, #22d3ee 60%, #33d69f);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 0 0 1px #ffffff22 inset, 0 6px 18px #1a6fd655;
+  }
+  .brand-mark svg{ width:24px; height:24px; }
+  .brand-text{ line-height:1.2; }
+  .brand-text .name{
+    font-family:var(--font-display); font-weight:700; font-size:1.28rem; letter-spacing:0.01em;
+    background:linear-gradient(90deg,#8fd8ff,#35c7f0 45%,#5fe3b6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  }
+  .brand-text .tag{
+    font-family:var(--font-mono); font-size:0.66rem; color:var(--text-mute);
+    letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .topbar-actions{ margin-left:auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .pill-select{
+    background:var(--surface-2); border:1px solid var(--border-bright); color:var(--text);
+    font-family:var(--font-mono); font-size:0.74rem; font-weight:600;
+    padding:7px 12px; border-radius:99px; cursor:pointer; outline:none;
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:7px;
+    padding:8px 15px; border-radius:99px; border:1px solid var(--border-bright);
+    background:var(--surface-2); color:var(--text); cursor:pointer;
+    font-size:0.76rem; font-weight:600; letter-spacing:0.02em;
+    transition:all .15s ease;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .btn-primary{
+    background:linear-gradient(135deg,#1a6fd6,#22aee0); border-color:transparent; color:#04101f;
+    box-shadow:0 4px 14px #1a6fd655;
+  }
+  .btn-primary:hover{ color:#04101f; box-shadow:0 6px 20px #22aee077; }
+  .btn-ghost{ background:transparent; }
+  .btn svg{ width:14px; height:14px; }
+
+  /* language / segmented toggle (reused for About license tabs too) */
+  .seg{ display:flex; gap:3px; background:var(--surface-3); border:1px solid var(--border); border-radius:10px; padding:4px; }
+  .seg button{ padding:7px 12px; border-radius:7px; border:none; background:transparent; cursor:pointer; font-size:0.74rem; font-weight:700; letter-spacing:0.02em; color:var(--text-mute); transition:all .15s; }
+  .seg button.active{ background:linear-gradient(135deg,#1a6fd6,#22aee0); color:#04101f; box-shadow:0 2px 10px #1a6fd650; }
+  .seg.full button{ flex:1; }
+
+  /* ============================================================
+     HERO
+     ============================================================ */
+  .hero{ max-width:1440px; margin:0 auto; padding:34px 28px 8px; }
+  .hero-grid{ display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:16px; }
+  .hero-card{
+    position:relative; border-radius:var(--radius-lg); padding:22px 24px;
+    background:linear-gradient(160deg, var(--surface) 0%, var(--surface-2) 100%);
+    border:1px solid var(--border); overflow:hidden;
+  }
+  .hero-card.main{
+    background:linear-gradient(155deg, #0d2547 0%, #0a3a3f 55%, #0a3624 100%);
+    border-color:#2a5f7f;
+  }
+  .hero-card .eyebrow{
+    font-family:var(--font-mono); font-size:0.68rem; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--text-dim); display:flex; align-items:center; gap:8px; margin-bottom:10px;
+  }
+  .hero-card .dot{ width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 8px var(--good); animation:blink 2.4s infinite; }
+  @keyframes blink{ 50%{ opacity:0.35; } }
+  .hero-num{
+    font-family:var(--font-display); font-weight:700; font-size:3.1rem; line-height:1;
+    letter-spacing:-0.01em; font-variant-numeric:tabular-nums;
+  }
+  .hero-card.main .hero-num{
+    background:linear-gradient(90deg,#8fe9ff,#5fe3b6);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    font-size:3.6rem;
+  }
+  .hero-sub{ font-size:0.82rem; color:var(--text-dim); margin-top:8px; }
+  .hero-foot{
+    margin-top:14px; padding-top:12px; border-top:1px solid #ffffff14;
+    display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:0.72rem; color:var(--text-dim);
+  }
+  .hero-foot b{ color:var(--text); }
+
+  /* ============================================================
+     LAYOUT
+     ============================================================ */
+  .main{ max-width:1440px; margin:0 auto; padding:22px 28px 40px; display:flex; flex-direction:column; gap:20px; }
+  .module-title{ display:flex; align-items:baseline; gap:12px; margin:6px 2px 2px; }
+  .module-title h2{ font-size:1.05rem; letter-spacing:0.01em; }
+  .module-title .module-num{
+    font-family:var(--font-mono); font-size:0.7rem; color:var(--text-mute);
+    background:var(--surface-2); border:1px solid var(--border); padding:2px 8px; border-radius:99px;
+  }
+  .module-desc{ font-size:0.8rem; color:var(--text-dim); margin:2px 2px 4px; max-width:70ch; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .span-2{ grid-column:1 / -1; }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden; position:relative; }
+  .card::before{
+    content:''; position:absolute; top:0; left:16px; right:16px; height:1px;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent); opacity:0.55;
+  }
+  .card.acc-good::before{ background:linear-gradient(90deg, transparent, var(--good), transparent); }
+  .card.acc-warn::before{ background:linear-gradient(90deg, transparent, var(--warn), transparent); }
+  .card.acc-violet::before{ background:linear-gradient(90deg, transparent, var(--accent-2), transparent); }
+  .card-head{ padding:14px 18px; display:flex; align-items:center; gap:10px; background:var(--surface-2); border-bottom:1px solid var(--border); }
+  .card-head .ico{
+    width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-mono); font-size:0.68rem; font-weight:700; flex-shrink:0;
+    background:var(--accent-soft); border:1px solid #35c7f055; color:var(--accent);
+  }
+  .card-head.i-good .ico{ background:var(--good-soft); border-color:#33d69f55; color:var(--good); }
+  .card-head.i-warn .ico{ background:var(--warn-soft); border-color:#f4b74055; color:var(--warn); }
+  .card-head.i-violet .ico{ background:#7c6cff1a; border-color:#7c6cff55; color:var(--accent-2); }
+  .card-head h3{ font-size:0.86rem; font-weight:600; letter-spacing:0.03em; text-transform:uppercase; color:var(--text-dim); font-family:var(--font-body); }
+  .card-head .meta{ margin-left:auto; font-family:var(--font-mono); font-size:0.66rem; color:var(--text-mute); }
+  .card-body{ padding:18px; }
+
+  .row{ display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #ffffff0a; min-height:42px; }
+  .row:last-child{ border-bottom:none; }
+  .row-title{ grid-template-columns:1fr; background:#ffffff05; margin:6px -18px; padding:6px 18px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
+  .row-title span{ font-family:var(--font-mono); font-size:0.66rem; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-mute); }
+  .row-label{ font-size:0.82rem; color:var(--text-dim); display:flex; align-items:center; gap:8px; }
+  .ref{
+    font-family:var(--font-mono); font-size:0.62rem; color:var(--text-mute); background:var(--surface-2);
+    padding:1px 5px; border-radius:4px; border:1px solid var(--border); min-width:24px; text-align:center; flex-shrink:0;
+  }
+
+  .field{ display:flex; align-items:center; gap:7px; }
+  .field input[type=number], .field select{
+    background:var(--surface-3); border:1px solid #f5b94255; border-radius:7px; color:var(--gold);
+    font-family:var(--font-mono); font-size:0.85rem; font-weight:700; padding:7px 10px; width:104px;
+    text-align:right; outline:none; box-shadow:inset 0 1px 3px #00000050; transition:all .15s;
+  }
+  .field select{ width:auto; text-align:left; }
+  .field input:focus, .field select:focus{ border-color:var(--gold); box-shadow:0 0 0 3px #f5b94230, inset 0 1px 3px #00000050; }
+  .field .unit{ font-family:var(--font-mono); font-size:0.68rem; color:var(--text-mute); min-width:28px; }
+
+  .result{
+    background:var(--good-soft); border:1px solid #33d69f40; border-radius:7px; color:var(--good);
+    font-family:var(--font-mono); font-weight:700; font-size:0.85rem; padding:7px 10px; min-width:104px;
+    text-align:right; box-shadow:inset 0 1px 3px #00000050;
+  }
+  .result.warn{ color:var(--warn); background:var(--warn-soft); border-color:#f4b74040; }
+  .result.bad{ color:var(--bad); background:var(--bad-soft); border-color:#ff5d7240; }
+
+  .formula{
+    font-family:var(--font-mono); font-size:0.62rem; color:var(--text-mute); background:#0a1424;
+    padding:3px 8px; border-radius:4px; border:1px solid var(--border); display:inline-block; margin-top:2px;
+  }
+  .tip{
+    font-size:0.68rem; color:var(--text-dim); background:#ffffff07; border-left:2px solid var(--accent);
+    padding:7px 10px; border-radius:0 6px 6px 0; margin-top:6px; font-family:var(--font-mono); line-height:1.55;
+  }
+  .tip.tip-warn{ border-left-color:var(--warn); }
+  .tip.tip-good{ border-left-color:var(--good); }
+  .divider{ height:1px; background:var(--border); margin:12px 0; }
+  .checkline{ display:flex; align-items:center; gap:9px; font-size:0.8rem; color:var(--text-dim); }
+  .checkline input{ width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
+
+  .legend{ display:flex; gap:20px; align-items:center; flex-wrap:wrap; font-size:0.73rem; color:var(--text-dim); padding:10px 28px; max-width:1440px; margin:0 auto; border-bottom:1px solid var(--border); }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  .legend-dot{ width:11px; height:11px; border-radius:3px; border:1px solid; }
+  .legend-dot.i{ background:var(--gold-soft); border-color:var(--gold); }
+  .legend-dot.r{ background:var(--good-soft); border-color:var(--good); }
+  .legend-dot.m{ background:#35c7f01a; border-color:var(--accent); }
+
+  .stat-hero{
+    background:linear-gradient(150deg,#0b2a26,#0a3327); border:2px solid #33d69f40; border-radius:14px;
+    padding:20px; text-align:center; margin:10px 0 6px; box-shadow:0 0 30px #33d69f22;
+  }
+  .stat-hero .label{ font-family:var(--font-mono); font-size:0.68rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-mute); margin-bottom:6px; }
+  .stat-hero .value{ font-family:var(--font-display); font-weight:700; font-size:3rem; color:var(--good); line-height:1; text-shadow:0 0 26px #33d69f70; }
+  .stat-hero .sub{ font-size:0.72rem; color:var(--text-dim); margin-top:6px; }
+
+  .badge{ padding:6px 14px; border-radius:8px; font-family:var(--font-mono); font-weight:700; font-size:0.82rem; min-width:100px; text-align:center; }
+  .badge.cpu{ background:#7c6cff22; border:1px solid var(--accent-2); color:#b3a8ff; box-shadow:0 0 14px #7c6cff40; }
+  .badge.ram{ background:#1a6fd622; border:1px solid #35c7f0; color:#8fe9ff; box-shadow:0 0 14px #35c7f040; }
+  .badge.storage{ background:#f4b74022; border:1px solid var(--warn); color:#ffd27a; box-shadow:0 0 14px #f4b74040; }
+
+  .usage-list{ display:flex; flex-direction:column; gap:14px; padding:4px 0; }
+  .usage-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .usage-name{ font-size:0.76rem; font-weight:600; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .usage-pct{ font-family:var(--font-mono); font-size:0.8rem; font-weight:700; font-variant-numeric:tabular-nums; }
+  .track{ height:8px; background:var(--surface-3); border-radius:99px; overflow:hidden; border:1px solid var(--border); }
+  .fill{ height:100%; border-radius:99px; transition:width .5s cubic-bezier(.34,1.56,.64,1); }
+  .fill.cpu{ background:linear-gradient(90deg,#5b46e0,#7c6cff); }
+  .fill.ram{ background:linear-gradient(90deg,#1a6fd6,#35c7f0); }
+  .fill.stor{ background:linear-gradient(90deg,#c98a1e,#f4b740); }
+  .fill.warnfill{ filter:brightness(1.15); }
+  .fill.badfill{ filter:brightness(1.25) saturate(1.3); }
+
+  .chartbox{ display:flex; align-items:flex-end; gap:18px; height:150px; padding:0 10px; margin-top:14px; justify-content:center; }
+  .bargroup{ display:flex; flex-direction:column; align-items:center; gap:7px; flex:1; max-width:80px; }
+  .barwrap{ height:120px; width:100%; background:var(--surface-3); border:1px solid var(--border); border-radius:6px 6px 0 0; display:flex; align-items:flex-end; overflow:hidden; }
+  .barfill{ width:100%; border-radius:4px 4px 0 0; transition:height .6s cubic-bezier(.34,1.2,.64,1); }
+  .barfill.cpu{ background:linear-gradient(0deg,#4b3ac0,#7c6cff); }
+  .barfill.ram{ background:linear-gradient(0deg,#155ba8,#35c7f0); }
+  .barfill.stor{ background:linear-gradient(0deg,#a86f14,#f4b740); }
+  .barlabel{ font-size:0.68rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-mute); }
+  .barpct{ font-family:var(--font-mono); font-size:0.7rem; font-weight:700; color:var(--text-dim); }
+
+  .ministat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .ministat{ background:var(--surface-3); border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
+  .ministat .k{ font-size:0.63rem; color:var(--text-mute); font-family:var(--font-mono); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:4px; }
+  .ministat .v{ font-size:1.08rem; font-weight:700; font-family:var(--font-mono); }
+
+  .status-row{ display:flex; gap:9px; flex-wrap:wrap; padding:13px 18px; background:var(--surface-2); border-top:1px solid var(--border); }
+  .chip{ display:flex; align-items:center; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:99px; padding:4px 10px; font-size:0.71rem; color:var(--text-dim); font-family:var(--font-mono); }
+  .chip .dot{ width:6px; height:6px; border-radius:50%; }
+  .chip .dot.g{ background:var(--good); } .chip .dot.y{ background:var(--warn); } .chip .dot.r{ background:var(--bad); }
+
+  .tablewrap{ overflow-x:auto; }
+  table.cmp{ width:100%; border-collapse:collapse; font-size:0.79rem; min-width:640px; }
+  table.cmp th{ background:var(--surface-2); padding:10px 13px; text-align:left; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; font-size:0.65rem; color:var(--text-mute); font-family:var(--font-mono); border-bottom:1px solid var(--border); position:sticky; top:0; }
+  table.cmp td{ padding:10px 13px; border-bottom:1px solid #ffffff0a; color:var(--text-dim); font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  table.cmp tr:hover td{ background:#ffffff05; }
+  table.cmp td.hl{ color:var(--good); font-weight:700; }
+  table.cmp td.best-cost{ color:var(--accent); font-weight:700; }
+  table.cmp .yes{ color:var(--good); } .no{ color:var(--text-mute); }
+  table.cmp tr.recommended td{ background:#33d69f0f; }
+  table.cmp tr.recommended td:first-child{ box-shadow:inset 3px 0 0 var(--good); }
+
+  .consult-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .consult-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px; display:flex; flex-direction:column; gap:11px; }
+  .consult-head{ display:flex; align-items:center; gap:10px; }
+  .consult-head .ico{ width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .consult-head h3{ font-size:0.92rem; font-family:var(--font-body); font-weight:700; }
+  .consult-head p{ font-size:0.7rem; color:var(--text-mute); margin-top:1px; }
+  textarea.consult-input, input.consult-input{
+    width:100%; background:var(--surface-3); border:1px solid var(--border-bright); border-radius:9px; color:var(--text);
+    font-family:var(--font-body); font-size:0.84rem; padding:11px 13px; outline:none; resize:vertical; min-height:74px;
+  }
+  input.consult-input{ min-height:unset; }
+  textarea.consult-input:focus, input.consult-input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px #35c7f025; }
+  .chip-row{ display:flex; gap:7px; flex-wrap:wrap; }
+  .sugg-chip{
+    font-size:0.68rem; padding:5px 10px; border-radius:99px; border:1px solid var(--border-bright); background:var(--surface-2);
+    color:var(--text-dim); cursor:pointer; transition:all .15s; font-family:var(--font-body);
+  }
+  .sugg-chip:hover{ border-color:var(--accent); color:var(--accent); }
+  .consult-foot{ display:flex; gap:8px; align-items:center; }
+  .consult-note{ font-size:0.68rem; color:var(--text-mute); font-family:var(--font-mono); line-height:1.5; }
+
+  .foot{ max-width:1440px; margin:8px auto 40px; padding:0 28px; }
+  .foot-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:18px 20px; }
+  .foot-card h4{ font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); margin-bottom:8px; font-family:var(--font-body); font-weight:700; }
+  .foot-card p, .foot-card li{ font-size:0.76rem; color:var(--text-mute); line-height:1.7; }
+  .foot-card a{ color:var(--accent); text-decoration:none; }
+  .foot-card a:hover{ text-decoration:underline; }
+  .src-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:6px 24px; margin-top:6px; }
+  .foot-links{ display:flex; gap:14px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .foot-links button{ background:none; border:none; color:var(--accent); font-family:var(--font-body); font-size:0.76rem; font-weight:600; cursor:pointer; padding:0; }
+  .foot-links button:hover{ text-decoration:underline; }
+
+  /* ============================================================
+     ABOUT MODAL
+     ============================================================ */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:100; background:#020509d9; backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+    opacity:0; pointer-events:none; transition:opacity .18s ease;
+  }
+  .modal-overlay.open{ opacity:1; pointer-events:auto; }
+  .modal{
+    background:linear-gradient(165deg, var(--surface) 0%, var(--surface-2) 100%);
+    border:1px solid var(--border-bright); border-radius:var(--radius-lg);
+    max-width:760px; width:100%; max-height:88vh; overflow-y:auto;
+    box-shadow:0 30px 80px #000000a0, 0 0 0 1px #ffffff08 inset;
+    transform:translateY(10px); transition:transform .18s ease;
+  }
+  .modal-overlay.open .modal{ transform:translateY(0); }
+  .modal-head{ position:sticky; top:0; z-index:1; display:flex; align-items:center; gap:12px; padding:18px 22px; background:var(--surface-2); border-bottom:1px solid var(--border); }
+  .modal-head h2{ font-size:1.15rem; }
+  .modal-head .sub{ font-size:0.72rem; color:var(--text-mute); font-family:var(--font-mono); }
+  .modal-close{
+    margin-left:auto; width:32px; height:32px; border-radius:9px; border:1px solid var(--border-bright);
+    background:var(--surface-3); color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .modal-close:hover{ color:var(--bad); border-color:var(--bad); }
+  .modal-body{ padding:22px; display:flex; flex-direction:column; gap:22px; }
+  .about-author{ display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+  .about-avatar{
+    width:58px; height:58px; border-radius:16px; flex-shrink:0;
+    background:linear-gradient(135deg,#1a6fd6,#22d3ee 55%,#33d69f);
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:1.4rem; color:#04101f;
+  }
+  .about-name{ font-family:var(--font-display); font-weight:700; font-size:1.25rem; }
+  .about-role{ font-size:0.76rem; color:var(--text-dim); line-height:1.7; margin-top:5px; max-width:56ch; }
+  .about-contact{ display:flex; flex-direction:column; gap:5px; margin-top:10px; font-family:var(--font-mono); font-size:0.79rem; }
+  .about-contact a{ color:var(--accent); text-decoration:none; }
+  .about-contact a:hover{ text-decoration:underline; }
+  .section-label{ font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-mute); font-weight:700; font-family:var(--font-body); margin-bottom:2px; }
+
+  .gh-badges{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .gh-badge{ display:inline-flex; height:22px; border-radius:4px; overflow:hidden; box-shadow:0 1px 3px #00000060; font-family:'IBM Plex Sans',sans-serif; }
+  .gh-badge span{ display:flex; align-items:center; padding:0 8px; font-size:0.66rem; font-weight:600; white-space:nowrap; }
+  .gh-badge .lb{ background:#21262d; color:#c9d1d9; }
+  .gh-badge .vl{ color:#04101f; }
+
+  .lic-note{ font-size:0.78rem; color:var(--text-dim); line-height:1.7; }
+  .lic-box{
+    background:#080f1f; border:1px solid var(--border); border-radius:10px; padding:14px 16px;
+    max-height:230px; overflow-y:auto; font-family:var(--font-mono); font-size:0.7rem; line-height:1.7; color:var(--text-dim); white-space:pre-wrap;
+  }
+  .about-foot{ display:flex; justify-content:space-between; align-items:center; padding-top:14px; border-top:1px solid var(--border); font-size:0.68rem; color:var(--text-mute); font-family:var(--font-mono); flex-wrap:wrap; gap:8px; }
+
+  /* responsive */
+  @media (max-width:1080px){
+    .hero-grid{ grid-template-columns:1fr; }
+    .grid2{ grid-template-columns:1fr; }
+    .span-2{ grid-column:1; }
+    .consult-grid{ grid-template-columns:1fr; }
+    .about-author{ flex-direction:column; }
+  }
+  @media (max-width:640px){
+    .topbar-inner, .main, .hero, .legend, .foot{ padding-left:16px; padding-right:16px; }
+    .hero-num{ font-size:2.3rem; }
+    .hero-card.main .hero-num{ font-size:2.7rem; }
+    .modal-body{ padding:16px; }
+  }
+</style>
+
+<div class="bg-scene">
+  <div class="bg-grid"></div>
+  <svg viewBox="0 0 1440 400" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,260 C280,190 420,340 720,270 C1000,205 1180,300 1440,220 L1440,400 L0,400 Z" fill="url(#waveA)"/>
+    <path d="M0,320 C320,270 560,380 860,320 C1120,270 1300,350 1440,310 L1440,400 L0,400 Z" fill="url(#waveB)"/>
+    <defs>
+      <linearGradient id="waveA" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#0e2f52"/><stop offset="55%" stop-color="#0e4a52"/><stop offset="100%" stop-color="#0e4a34"/>
+      </linearGradient>
+      <linearGradient id="waveB" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#0a2038"/><stop offset="100%" stop-color="#0a3324"/>
+      </linearGradient>
+    </defs>
+  </svg>
+</div>
+
+<!-- ============================================================
+     TOPBAR
+     ============================================================ -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="7" width="26" height="18" rx="3" fill="#04101f" stroke="#ffffff" stroke-width="1.3" opacity="0.92"/>
+          <rect x="6" y="10" width="20" height="2.6" rx="1" fill="#ffffff" opacity="0.8"/>
+          <rect x="6" y="14.5" width="13" height="1.8" rx="0.9" fill="#ffffff" opacity="0.55"/>
+          <rect x="6" y="18" width="9" height="1.8" rx="0.9" fill="#ffffff" opacity="0.4"/>
+          <circle cx="23" cy="19" r="3.4" fill="#04101f"/>
+          <path d="M21.3 19 L22.6 20.3 L24.8 17.8" stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <div class="name">VVF/VCF 9 · Planificador</div>
+        <div class="tag" data-i18n="tb.tag">Capacity planning &amp; licencia por-core — no oficial</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <div class="seg" id="langToggle">
+        <button class="lang-btn active" data-lang="es" onclick="setLang('es')">ES</button>
+        <button class="lang-btn" data-lang="en" onclick="setLang('en')">EN</button>
+      </div>
+      <select class="pill-select" id="editionSelect" onchange="onEditionChange()">
+        <option value="vvf" data-i18n="tb.optVVF">Edición: vSphere Foundation (VVF)</option>
+        <option value="vcf" data-i18n="tb.optVCF">Edición: Cloud Foundation (VCF)</option>
+        <option value="vcf-edge" data-i18n="tb.optEdge">Edición: Cloud Foundation Edge</option>
+      </select>
+      <button class="btn" id="aboutBtn" onclick="openAbout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <span data-i18n="tb.about">Acerca de</span>
+      </button>
+      <button class="btn" id="printBtn" onclick="window.print()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>
+        <span data-i18n="tb.print">Imprimir</span>
+      </button>
+      <button class="btn" id="exportBtn" onclick="exportReport()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+        <span data-i18n="tb.export">Exportar</span>
+      </button>
+      <button class="btn btn-primary" onclick="recalcAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 2v6h-6M3 22v-6h6M3.5 9a9 9 0 0114.85-3.36L21 8M20.5 15a9 9 0 01-14.85 3.36L3 16"/></svg>
+        <span data-i18n="tb.recalc">Recalcular</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span style="font-weight:700; color:var(--text-mute); letter-spacing:0.08em; text-transform:uppercase; font-size:0.68rem;" data-i18n="lg.legend">Leyenda</span>
+  <div class="legend-item"><div class="legend-dot i"></div><span data-i18n="lg.input">Entrada editable</span></div>
+  <div class="legend-item"><div class="legend-dot r"></div><span data-i18n="lg.result">Resultado calculado</span></div>
+  <div class="legend-item"><div class="legend-dot m"></div><span data-i18n="lg.money">Costo monetario</span></div>
+  <div style="margin-left:auto; font-family:var(--font-mono); font-size:0.68rem; color:var(--text-mute);" data-i18n="lg.updated">Actualizado: vCF/VVF 9.0.x · 9.1</div>
+</div>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<div class="hero">
+  <div class="hero-grid">
+    <div class="hero-card main">
+      <div class="eyebrow"><span class="dot"></span> <span data-i18n="hr.title1">Capacidad máxima recomendada</span></div>
+      <div class="hero-num" id="heroMaxVMs">–</div>
+      <div class="hero-sub" id="heroSub1">–</div>
+      <div class="hero-foot">
+        <span>CPU <b id="heroPctCPU">–</b></span>
+        <span>RAM <b id="heroPctRAM">–</b></span>
+        <span>Storage <b id="heroPctStor">–</b></span>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="eyebrow" data-i18n="hr.title2">Cores con licencia requeridos</div>
+      <div class="hero-num" id="heroLicCores" style="font-size:2.5rem;">–</div>
+      <div class="hero-sub" id="heroSub2">–</div>
+      <div class="hero-foot"><span><span data-i18n="hr.physical">Físicos</span>: <b id="heroPhysCores">–</b></span><span><span data-i18n="hr.sockets">Sockets</span>: <b id="heroSockets">–</b></span></div>
+    </div>
+    <div class="hero-card">
+      <div class="eyebrow"><span data-i18n="hr.title3">Costo anual estimado</span> (<span id="heroEditionLabel">VVF</span>)</div>
+      <div class="hero-num" id="heroCost" style="font-size:2.5rem;">–</div>
+      <div class="hero-sub" id="heroSub3">–</div>
+      <div class="hero-foot"><span><span data-i18n="hr.monthly">Mensual</span>: <b id="heroCostMonth">–</b></span><span><span data-i18n="hr.years3">3 años</span>: <b id="heroCost3y">–</b></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MAIN
+     ============================================================ -->
+<div class="main">
+
+  <!-- MODULE 1: CLUSTER + VM -->
+  <div class="module-title"><h2><span data-i18n="m1.h2">1 · Infraestructura y perfil de VM</span></h2><span class="module-num">CAPACITY</span></div>
+  <p class="module-desc" data-i18n="m1.desc">Define el hardware físico del clúster y el tamaño estándar de máquina virtual. Estos valores alimentan tanto el cálculo de capacidad como el de licenciamiento (los sockets y cores por CPU determinan los cores facturables).</p>
+
+  <div class="grid2">
+    <div class="card acc-warn">
+      <div class="card-head"><div class="ico">01</div><h3 data-i18n="m1.card1">Hosts físicos</h3><span class="meta">A1:A8</span></div>
+      <div class="card-body">
+        <div class="row row-title"><span data-i18n="m1.t1">Servidores del clúster</span></div>
+        <div class="row"><div class="row-label"><span class="ref">A1</span><span data-i18n="m1.numHosts">Número de hosts</span></div>
+          <div class="field"><input type="number" id="numHosts" value="4" min="1" max="128" onchange="recalcAll()"><span class="unit" data-i18n="u.hosts">hosts</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A2</span><span data-i18n="m1.sockets">CPUs (sockets) por host</span></div>
+          <div class="field"><input type="number" id="socketsPerHost" value="2" min="1" max="8" onchange="recalcAll()"><span class="unit" data-i18n="u.sockets">sockets</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A3</span><span data-i18n="m1.coresPS">Cores físicos por CPU</span></div>
+          <div class="field"><input type="number" id="coresPerSocket" value="16" min="1" max="128" onchange="recalcAll()"><span class="unit" data-i18n="u.cores">cores</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A4</span><span data-i18n="m1.ramHost">RAM por host</span></div>
+          <div class="field"><input type="number" id="ramPerHost" value="512" min="1" onchange="recalcAll()"><span class="unit">GB</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A5</span><span data-i18n="m1.storage">Storage compartido total (vSAN/SAN)</span></div>
+          <div class="field"><input type="number" id="storageTotal" value="12288" min="1" onchange="recalcAll()"><span class="unit">GB</span></div></div>
+
+        <div class="row row-title"><span data-i18n="m1.t2">Reservas y overhead</span></div>
+        <div class="row"><div class="row-label"><span class="ref">A6</span><span data-i18n="m1.ha">% Reserva HA (N+1/N+2)</span></div>
+          <div class="field"><input type="number" id="haReserve" value="25" min="0" max="90" step="0.01" onchange="recalcAll()"><span class="unit">%</span></div></div>
+        <div class="tip" data-i18n="m1.haTip">N+1 (3 hosts)=33.33% · N+1 (4 hosts)=25% · N+1 (6 hosts)=16.67% · N+2 (4 hosts)=50% · Sin HA=0%</div>
+        <div class="row"><div class="row-label"><span class="ref">A7</span><span data-i18n="m1.ov">% Overhead de hipervisor</span></div>
+          <div class="field"><input type="number" id="hypervisorOverhead" value="5" min="0" max="30" step="0.5" onchange="recalcAll()"><span class="unit">%</span></div></div>
+        <div class="tip" data-i18n="m1.ovTip">Rango típico 3–6% (ESXi + vSAN witness/metadata). Usa 0 para ignorarlo.</div>
+
+        <div class="divider"></div>
+        <div class="row" style="border:none; padding-top:2px;">
+          <div class="row-label" data-i18n="m1.presets">Presets rápidos</div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-ghost" style="padding:5px 10px; font-size:0.68rem;" onclick="applyPreset('s')" data-i18n="m1.small">Pequeño</button>
+            <button class="btn btn-ghost" style="padding:5px 10px; font-size:0.68rem;" onclick="applyPreset('m')" data-i18n="m1.medium">Mediano</button>
+            <button class="btn btn-ghost" style="padding:5px 10px; font-size:0.68rem;" onclick="applyPreset('l')" data-i18n="m1.large">Grande</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card acc-warn">
+      <div class="card-head"><div class="ico">02</div><h3 data-i18n="m1.card2">Perfil de VM estándar</h3><span class="meta">A10:A14</span></div>
+      <div class="card-body">
+        <div class="row row-title"><span data-i18n="m1.t3">Tamaño de máquina virtual tipo</span></div>
+        <div class="row"><div class="row-label"><span class="ref">A10</span><span data-i18n="m1.vcpus">vCPUs por VM</span></div>
+          <div class="field"><input type="number" id="vcpusPerVM" value="4" min="1" max="128" onchange="recalcAll()"><span class="unit">vCPU</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A11</span><span data-i18n="m1.ramVM">RAM por VM</span></div>
+          <div class="field"><input type="number" id="ramPerVM" value="16" min="1" onchange="recalcAll()"><span class="unit">GB</span></div></div>
+        <div class="row"><div class="row-label"><span class="ref">A12</span><span data-i18n="m1.diskVM">Disco por VM (thick/aprovisionado)</span></div>
+          <div class="field"><input type="number" id="diskPerVM" value="120" min="1" onchange="recalcAll()"><span class="unit">GB</span></div></div>
+
+        <div class="divider"></div>
+        <div class="row row-title"><span data-i18n="m1.t4">Overcommit de CPU</span></div>
+        <div class="row" style="border:none;">
+          <div class="row-label"><span class="ref">A13</span><span data-i18n="m1.ratio">Ratio vCPU:pCPU</span></div>
+          <div class="field" style="flex-direction:column; align-items:flex-end; gap:5px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="range" id="overcommitSlider" min="1" max="6" step="0.5" value="2" oninput="syncOvercommit(this.value)" style="width:100px; accent-color:var(--gold);">
+              <input type="number" id="overcommitRatio" value="2" min="1" max="6" step="0.5" style="width:64px;" onchange="syncOvercommit(this.value)">
+              <span class="unit">:1</span>
+            </div>
+          </div>
+        </div>
+        <div class="tip" data-i18n="m1.ratioTip">1:1 = sin overcommit. 1.5–2:1 = uso moderado recomendado por VMware en la mayoría de cargas de VVF/VCF. 2.5–4:1 = agresivo, solo cargas con bajo uso real de CPU.</div>
+
+        <div class="divider"></div>
+        <div class="checkline"><input type="checkbox" id="useVsanStorage" checked onchange="recalcAll()"> <span data-i18n="m1.vsanCheck">El storage compartido (A5) es capacidad <b>vSAN</b> (afecta el análisis de licenciamiento §3)</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 2: CAPACITY RESULTS -->
+  <div class="module-title"><h2 data-i18n="m2.h2">2 · Resultados de capacidad</h2><span class="module-num" data-i18n="m2.tag">CALCULADO</span></div>
+  <div class="grid2">
+    <div class="card acc-good">
+      <div class="card-head i-good"><div class="ico">Σ</div><h3 data-i18n="m2.card1">Recursos del clúster</h3><span class="meta">B1:B9</span></div>
+      <div class="card-body">
+        <div class="row row-title"><span data-i18n="m2.t1">Recursos brutos</span></div>
+        <div class="row"><div class="row-label"><span class="ref">B1</span><span data-i18n="m2.sockets">Sockets totales</span> <span class="formula">=A1×A2</span></div><div class="result" id="totalSockets">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B2</span><span data-i18n="m2.cores">Cores físicos totales</span> <span class="formula">=B1×A3</span></div><div class="result" id="totalCores">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B3</span><span data-i18n="m2.ram">RAM total</span> <span class="formula">=A1×A4</span></div><div class="result" id="totalRAM">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B4</span><span data-i18n="m2.storage">Storage total</span> <span class="formula">=A5</span></div><div class="result" id="totalStorage">–</div></div>
+        <div class="row row-title"><span data-i18n="m2.t2">Recursos usables (tras HA + overhead)</span></div>
+        <div class="row"><div class="row-label"><span class="ref">B5</span><span data-i18n="m2.ucores">Cores usables</span> <span class="formula">=B2×(1-A6-A7)</span></div><div class="result" id="usableCores">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B6</span><span data-i18n="m2.uram">RAM usable</span> <span class="formula">=B3×(1-A6-A7)</span></div><div class="result" id="usableRAM">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B7</span><span data-i18n="m2.ustor">Storage usable</span> <span class="formula">=B4×(1-A7)</span></div><div class="result" id="usableStorage">–</div></div>
+      </div>
+    </div>
+
+    <div class="card acc-good">
+      <div class="card-head i-good"><div class="ico">▲</div><h3 data-i18n="m2.card2">Capacidad máxima de VMs</h3><span class="meta">B10:B15</span></div>
+      <div class="card-body">
+        <div class="row row-title"><span data-i18n="m2.t3">VMs máximas por recurso</span></div>
+        <div class="row"><div class="row-label"><span class="ref">B10</span><span data-i18n="m2.byCPU">Por CPU</span> <span class="formula">=INT(B5÷A10×A13)</span></div><div class="result" id="maxByCPU">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B11</span><span data-i18n="m2.byRAM">Por RAM</span> <span class="formula">=INT(B6÷A11)</span></div><div class="result" id="maxByRAM">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">B12</span><span data-i18n="m2.byStor">Por Storage</span> <span class="formula">=INT(B7÷A12)</span></div><div class="result" id="maxByStorage">–</div></div>
+        <div class="stat-hero">
+          <div class="label"><span data-i18n="m2.heroLabel">B13 · Máximo de VMs recomendadas</span></div>
+          <div class="value" id="maxVMs">–</div>
+          <div class="sub" data-i18n="m2.heroSub">El menor de los tres recursos (cuello de botella)</div>
+        </div>
+        <div class="row" style="border:none;"><div class="row-label"><span class="ref">B14</span><span data-i18n="m2.bottleneck">Recurso limitante</span></div><div class="badge" id="bottleneckBadge">–</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><div class="ico">%</div><h3 data-i18n="m2.card3">Utilización con máx. VMs</h3><span class="meta">B16:B18</span></div>
+      <div class="card-body">
+        <div class="usage-list">
+          <div class="usage-item"><div class="usage-head"><div class="usage-name"><span class="ref">B16</span>CPU</div><div class="usage-pct" id="pctCPULabel" style="color:var(--accent-2);">–</div></div><div class="track"><div class="fill cpu" id="barCPU" style="width:0%;"></div></div></div>
+          <div class="usage-item"><div class="usage-head"><div class="usage-name"><span class="ref">B17</span>RAM</div><div class="usage-pct" id="pctRAMLabel" style="color:var(--accent);">–</div></div><div class="track"><div class="fill ram" id="barRAM" style="width:0%;"></div></div></div>
+          <div class="usage-item"><div class="usage-head"><div class="usage-name"><span class="ref">B18</span><span data-i18n="lbl.storage">Storage</span></div><div class="usage-pct" id="pctStorageLabel" style="color:var(--warn);">–</div></div><div class="track"><div class="fill stor" id="barStorage" style="width:0%;"></div></div></div>
+        </div>
+      </div>
+      <div class="status-row" id="statusRow"><div class="chip"><div class="dot g"></div><span data-i18n="js.calculating">Calculando…</span></div></div>
+    </div>
+
+    <div class="card acc-violet">
+      <div class="card-head i-violet"><div class="ico">📊</div><h3 data-i18n="m2.card4">Gráfico de utilización</h3><span class="meta">visual</span></div>
+      <div class="card-body">
+        <div class="chartbox">
+          <div class="bargroup"><div class="barwrap"><div class="barfill cpu" id="chartCPU" style="height:0%;"></div></div><div class="barpct" id="chartCPUPct">–</div><div class="barlabel">CPU</div></div>
+          <div class="bargroup"><div class="barwrap"><div class="barfill ram" id="chartRAM" style="height:0%;"></div></div><div class="barpct" id="chartRAMPct">–</div><div class="barlabel">RAM</div></div>
+          <div class="bargroup"><div class="barwrap"><div class="barfill stor" id="chartStorage" style="height:0%;"></div></div><div class="barpct" id="chartStorPct">–</div><div class="barlabel" data-i18n="lbl.storage">Storage</div></div>
+        </div>
+        <div class="ministat-grid">
+          <div class="ministat"><div class="k" data-i18n="m2.mini1">vCPU:pCPU efectivo</div><div class="v" id="vcpuRatio" style="color:var(--accent-2);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m2.mini2">VMs por host</div><div class="v" id="vmsPerHost" style="color:var(--accent);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m2.mini3">RAM libre</div><div class="v" id="ramFree" style="color:var(--good);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m2.mini4">Storage libre</div><div class="v" id="storageFree" style="color:var(--warn);">–</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODULE 3: LICENSING -->
+  <div class="module-title"><h2 data-i18n="m3.h2">3 · Licenciamiento y costos por-core</h2><span class="module-num">VVF / VCF</span></div>
+  <p class="module-desc" data-i18n="m3.desc">Desde vSphere Foundation/Cloud Foundation 9.0, Broadcom licencia <b>por core físico</b>, con un <b>mínimo de 16 cores por CPU física</b> (8 en VCF Edge) — un socket con menos cores se factura como si tuviera el mínimo. Los precios por core son <b>estimaciones de referencia</b>: Broadcom no publica lista pública; solicita cotización formal con tu partner autorizado.</p>
+
+  <div class="grid2">
+    <div class="card acc-violet">
+      <div class="card-head i-violet"><div class="ico">C1</div><h3 data-i18n="m3.card1">Cálculo de cores licenciables</h3><span class="meta">C1:C6</span></div>
+      <div class="card-body">
+        <div class="row row-title"><span data-i18n="m3.t1">Regla oficial: mínimo por CPU física</span></div>
+        <div class="row"><div class="row-label"><span class="ref">C1</span><span data-i18n="m3.minCores">Mínimo de cores/CPU (edición)</span></div><div class="result" id="minCoresPerSocket">16</div></div>
+        <div class="row"><div class="row-label"><span class="ref">C2</span><span data-i18n="m3.licPS">Cores licenciables por socket</span> <span class="formula">=MAX(A3,C1)</span></div><div class="result" id="licPerSocket">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">C3</span><span data-i18n="m3.totalLic">Total cores licenciables</span> <span class="formula">=B1×C2</span></div><div class="result" id="totalLicCores">–</div></div>
+        <div class="row"><div class="row-label"><span class="ref">C4</span><span data-i18n="m3.phantom">Cores "fantasma" (pagados, no físicos)</span> <span class="formula">=C3-B2</span></div><div class="result warn" id="phantomCores">–</div></div>
+        <div class="tip" id="phantomTip">–</div>
+
+        <div class="divider"></div>
+        <div class="row row-title"><span data-i18n="m3.t2">Precio de referencia (editable)</span></div>
+        <div class="row"><div class="row-label" data-i18n="m3.priceVVF">USD / core / año — VVF</div><div class="field"><input type="number" id="priceVVF" value="135" min="0" step="1" onchange="recalcAll()"><span class="unit">USD</span></div></div>
+        <div class="row"><div class="row-label" data-i18n="m3.priceVCF">USD / core / año — VCF</div><div class="field"><input type="number" id="priceVCF" value="350" min="0" step="1" onchange="recalcAll()"><span class="unit">USD</span></div></div>
+        <div class="row"><div class="row-label" data-i18n="m3.priceEdge">USD / core / año — VCF Edge</div><div class="field"><input type="number" id="priceEdge" value="240" min="0" step="1" onchange="recalcAll()"><span class="unit">USD</span></div></div>
+        <div class="tip tip-warn" data-i18n="m3.priceTip">Precios de lista aproximados reportados por partners/analistas de canal en 2026, no un precio oficial de Broadcom. Los descuentos empresariales negociados suelen ser 30–55% menores. Ajusta libremente estos campos con tu cotización real.</div>
+      </div>
+    </div>
+
+    <div class="card acc-violet">
+      <div class="card-head i-violet"><div class="ico">C2</div><h3 data-i18n="m3.card2">Costo estimado — edición seleccionada</h3><span class="meta" id="selEditionMeta">VVF</span></div>
+      <div class="card-body">
+        <div class="stat-hero" style="background:linear-gradient(150deg,#0d2547,#0a2f4a); border-color:#35c7f050; box-shadow:0 0 30px #35c7f022;">
+          <div class="label" data-i18n="m3.annualLabel">Costo anual de licencia (suscripción)</div>
+          <div class="value" id="annualCost" style="color:#8fe9ff; text-shadow:0 0 26px #35c7f070;">–</div>
+          <div class="sub" id="costSubLine">–</div>
+        </div>
+        <div class="ministat-grid">
+          <div class="ministat"><div class="k" data-i18n="hr.monthly">Mensual</div><div class="v" id="monthlyCost" style="color:var(--accent);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m3.mini1">Costo / VM / año</div><div class="v" id="costPerVM" style="color:var(--accent);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m3.mini2">Total 3 años</div><div class="v" id="cost3y" style="color:var(--good);">–</div></div>
+          <div class="ministat"><div class="k" data-i18n="m3.mini3">Total 5 años</div><div class="v" id="cost5y" style="color:var(--good);">–</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="row row-title"><span data-i18n="m3.t3">Entitlement de vSAN incluido</span></div>
+        <div class="row"><div class="row-label" data-i18n="m3.vsanPerCore">TiB de vSAN por core (editable)</div><div class="field"><input type="number" id="vsanEntCur" value="0.25" min="0" step="0.05" onchange="recalcAll()"><span class="unit">TiB</span></div></div>
+        <div class="row"><div class="row-label"><span data-i18n="m3.vsanIncl">Capacidad vSAN incluida</span> <span class="formula">=C3×entitlement</span></div><div class="result" id="vsanIncluded">–</div></div>
+        <div class="row"><div class="row-label" data-i18n="m3.vsanNeeded">Storage solicitado (A5)</div><div class="result" id="vsanNeeded">–</div></div>
+        <div class="tip" id="vsanGapTip">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPARISON -->
+  <div class="card span-2" style="border-color:var(--border-bright);">
+    <div class="card-head"><div class="ico">⇄</div><h3 data-i18n="m3.cmpTitle">Comparación de ediciones — mismo hardware</h3><span class="meta">VVF · VCF · VCF Edge</span></div>
+    <div class="card-body">
+      <div class="checkline" style="margin-bottom:14px;"><input type="checkbox" id="needsNSX" onchange="recalcAll()"> <span data-i18n="m3.needsNSX">Requiero NSX / micro-segmentación / multi-tenant / HCX / automatización avanzada (Aria Automation)</span></div>
+      <div class="tablewrap">
+        <table class="cmp">
+          <thead><tr>
+            <th data-i18n="m3.thEd">Edición</th><th data-i18n="m3.thCores">Cores licenciados</th><th data-i18n="m3.thCost">Costo anual</th>
+            <th data-i18n="m3.thCostVM">Costo/VM/año</th><th data-i18n="m3.thVsan">vSAN incluido</th><th>NSX</th><th>HCX</th><th data-i18n="m3.thAria">Aria Automation</th>
+          </tr></thead>
+          <tbody id="cmpTableBody"><tr><td colspan="8" style="text-align:center; padding:20px;">–</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tip tip-good" id="recommendationTip" style="margin-top:12px;">–</div>
+    </div>
+  </div>
+
+  <!-- SCENARIO A/B (capacity) -->
+  <div class="card span-2" style="border-color:var(--border-bright);">
+    <div class="card-head"><div class="ico">AB</div><h3 data-i18n="sc.title">Comparación de escenarios de clúster</h3><span class="meta" data-i18n="sc.tag">Modo avanzado</span></div>
+    <div class="card-body">
+      <div class="grid2" style="margin-bottom:18px;">
+        <div style="background:var(--surface-2); border-radius:12px; padding:15px; border:1px solid #1a3a5f;">
+          <div style="font-family:var(--font-mono); font-size:0.72rem; font-weight:700; color:var(--accent); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:7px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);"></span><span data-i18n="sc.clusterA">Clúster A</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fHosts">Hosts</div><input type="number" id="cA_hosts" value="4" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fSockets">Sockets/host</div><input type="number" id="cA_sockets" value="2" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fCores">Cores/CPU</div><input type="number" id="cA_cores" value="16" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fRam">RAM/host (GB)</div><input type="number" id="cA_ram" value="512" class="scn-input" oninput="calcScenarios()"></div>
+            <div style="grid-column:1/-1;"><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fStorage">Storage (GB)</div><input type="number" id="cA_storage" value="12288" class="scn-input" style="width:100%;" oninput="calcScenarios()"></div>
+          </div>
+        </div>
+        <div style="background:var(--surface-2); border-radius:12px; padding:15px; border:1px solid #1a3a5f;">
+          <div style="font-family:var(--font-mono); font-size:0.72rem; font-weight:700; color:var(--good); letter-spacing:0.06em; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:7px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--good);"></span><span data-i18n="sc.clusterB">Clúster B</span></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fHosts">Hosts</div><input type="number" id="cB_hosts" value="6" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fSockets">Sockets/host</div><input type="number" id="cB_sockets" value="2" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fCores">Cores/CPU</div><input type="number" id="cB_cores" value="12" class="scn-input" oninput="calcScenarios()"></div>
+            <div><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fRam">RAM/host (GB)</div><input type="number" id="cB_ram" value="384" class="scn-input" oninput="calcScenarios()"></div>
+            <div style="grid-column:1/-1;"><div style="font-size:0.65rem; color:var(--text-mute); margin-bottom:3px;" data-i18n="sc.fStorage">Storage (GB)</div><input type="number" id="cB_storage" value="12288" class="scn-input" style="width:100%;" oninput="calcScenarios()"></div>
+          </div>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table class="cmp">
+          <thead><tr><th data-i18n="sc.thMetric">Métrica</th><th data-i18n="sc.clusterA">Clúster A</th><th data-i18n="sc.clusterB">Clúster B</th><th data-i18n="sc.thDiff">Diferencia</th><th data-i18n="sc.thBest">Mejor</th></tr></thead>
+          <tbody id="scnTableBody"><tr><td colspan="5" style="text-align:center; padding:20px;">–</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONSULT CENTER -->
+  <div class="module-title"><h2 data-i18n="cc.h2">4 · Centro de consulta</h2><span class="module-num" data-i18n="cc.tag">AYUDA</span></div>
+  <p class="module-desc" data-i18n="cc.desc">Prepara una pregunta con el contexto de tu cálculo actual y ábrela en Claude, o busca directamente la documentación oficial en Google — todo sin salir de esta página.</p>
+  <div class="consult-grid">
+
+    <!-- CLAUDE CHAT BOX -->
+    <div class="consult-card">
+      <div class="consult-head">
+        <div class="ico" style="background:linear-gradient(135deg,#c96442,#e0784f);">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 8.5 12 15l10-6.5L12 2z" fill="#fff" opacity="0.9"/><path d="M2 15.5L12 22l10-6.5" stroke="#fff" stroke-width="1.6" fill="none"/></svg>
+        </div>
+        <div><h3 data-i18n="cc.claudeTitle">Preguntar a Claude</h3><p data-i18n="cc.claudeSub">Copia tu pregunta + el contexto del cálculo y abre una conversación nueva</p></div>
+      </div>
+      <textarea class="consult-input" id="claudeQuestion" data-i18n-ph="cc.claudePh" placeholder="Ej: ¿Me conviene VVF o VCF para este clúster? ¿Cómo reduzco los cores fantasma?"></textarea>
+      <div class="chip-row">
+        <button class="sugg-chip" data-i18n="cc.chip1" onclick="fillClaude(t('cc.q1'))">VVF vs VCF para mi caso</button>
+        <button class="sugg-chip" data-i18n="cc.chip2" onclick="fillClaude(t('cc.q2'))">Cores fantasma</button>
+        <button class="sugg-chip" data-i18n="cc.chip3" onclick="fillClaude(t('cc.q3'))">Reducir costos</button>
+        <button class="sugg-chip" data-i18n="cc.chip4" onclick="fillClaude(t('cc.q4'))">Revisar sizing</button>
+      </div>
+      <div class="consult-foot">
+        <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="askClaude()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <span data-i18n="cc.claudeBtn">Copiar y abrir Claude</span>
+        </button>
+      </div>
+      <div class="consult-note" id="claudeNote" data-i18n="cc.claudeNote">Copia la pregunta con el contexto de tu clúster al portapapeles y abre una pestaña nueva en claude.ai — pega ahí (Ctrl/Cmd+V) para enviarla.</div>
+    </div>
+
+    <!-- GOOGLE SEARCH BOX -->
+    <div class="consult-card">
+      <div class="consult-head">
+        <div class="ico" style="background:#0e1a30; border:1px solid var(--border-bright);">
+          <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.1-.4-4.6H24v9h11.8c-.5 2.7-2.1 5-4.4 6.6v5.5h7.1c4.2-3.9 6.6-9.6 6.6-16.5z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.1 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-2.9.7-4.3v-5.7H4.5A22 22 0 002 24c0 3.5.8 6.9 2.5 10l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.2 29.9 2 24 2 15.4 2 8.1 6.9 4.5 14l7.3 5.7c1.7-5.2 6.5-9 12.2-9z"/></svg>
+        </div>
+        <div><h3 data-i18n="cc.googleTitle">Buscar en Google</h3><p data-i18n="cc.googleSub">Verifica cualquier dato contra la documentación oficial</p></div>
+      </div>
+      <input type="text" class="consult-input" id="googleQuery" data-i18n-ph="cc.googlePh" placeholder="Ej: VMware Cloud Foundation 9.1 licensing overview" onkeydown="if(event.key==='Enter'){event.preventDefault(); doGoogleSearch();}">
+      <div class="chip-row">
+        <button class="sugg-chip" onclick="fillGoogle('site:techdocs.broadcom.com VCF 9 licensing model')" data-i18n="cc.gchip1">Licensing Model (Broadcom)</button>
+        <button class="sugg-chip" onclick="fillGoogle('VMware Cloud Foundation 9.1 feature comparison vSphere Foundation')" data-i18n="cc.gchip2">Comparativa de ediciones</button>
+        <button class="sugg-chip" onclick="fillGoogle('vSAN sizing guide VMware Cloud Foundation 9')" data-i18n="cc.gchip3">Guía de sizing vSAN</button>
+        <button class="sugg-chip" onclick="fillGoogle('VMware Cloud Foundation 9.1 general FAQ')" data-i18n="cc.gchip4">FAQ oficial VCF 9.1</button>
+      </div>
+      <div class="consult-foot">
+        <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="doGoogleSearch()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <span data-i18n="cc.googleBtn">Buscar en Google</span>
+        </button>
+      </div>
+      <div class="consult-note" data-i18n="cc.googleNote">Abre los resultados en una pestaña nueva de Google. Útil para confirmar precios, entitlements y novedades de licenciamiento directamente con Broadcom.</div>
+    </div>
+  </div>
+
+  <!-- FOOTER SOURCES / DISCLAIMER -->
+  <div class="foot" style="padding:0;">
+    <div class="foot-card">
+      <h4 data-i18n="ft.h4">Fuentes y precisión de los datos</h4>
+      <p data-i18n="ft.p1">Las <b>reglas de licenciamiento por-core y el mínimo de 16 cores por CPU física</b> (8 para VCF Edge) provienen de la documentación técnica oficial de Broadcom. Los <b>precios por core</b> y los <b>entitlements de vSAN</b> son estimaciones de mercado reportadas por partners/analistas a 2026 — no son lista oficial de Broadcom y varían por región, volumen y negociación. Confirma siempre con tu representante o partner autorizado de Broadcom antes de presupuestar.</p>
+      <div class="src-grid">
+        <a href="https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-0/licensing/licensing-overview/licensing-model.html" target="_blank" rel="noopener">→ Broadcom TechDocs — Licensing Model (VCF 9.0+)</a>
+        <a href="https://techdocs.broadcom.com/us/en/vmware-cis/vcf/vcf-9-0-and-later/9-1/licensing/licensing-overview.html" target="_blank" rel="noopener">→ Broadcom TechDocs — Licensing Overview (9.1)</a>
+        <a href="https://www.vmware.com/docs/vmware-cloud-foundation-9-1-general-faqs" target="_blank" rel="noopener">→ VMware — VCF 9.1 General FAQ</a>
+        <a href="https://www.vmware.com/docs/vmware-cloud-foundation-9-1-feature-comparison-and-upgrade-paths" target="_blank" rel="noopener">→ VMware — VCF 9.1 Feature Comparison &amp; Upgrade Paths</a>
+      </div>
+      <p style="margin-top:10px;" data-i18n="ft.p2">Herramienta no oficial, sin afiliación con Broadcom Inc. ni VMware. Todas las marcas pertenecen a sus respectivos dueños.</p>
+      <div class="foot-links">
+        <button onclick="openAbout()" data-i18n="ft.aboutLink">Acerca del autor y licencia →</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     ABOUT MODAL
+     ============================================================ -->
+<div class="modal-overlay" id="aboutOverlay" onclick="if(event.target===this) closeAbout()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="modal-head">
+      <h2 id="aboutTitle" data-i18n="ab.title">Acerca de este proyecto</h2>
+      <button class="modal-close" onclick="closeAbout()" aria-label="Cerrar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <!-- AUTHOR -->
+      <div>
+        <div class="section-label" data-i18n="ab.authorLabel">Autor</div>
+        <div class="about-author">
+          <div class="about-avatar">MT</div>
+          <div>
+            <div class="about-name">Mario Tabuada Mussio</div>
+            <div class="about-role">IT Ambassador | Instructor | IT Consultant | VMware &amp; Citrix Solutions Architect | AWS EVS | Cloud Specialist | VVF-VCF-SDDC | Cisco CCNA+Sec | AVIXA CTS | Scrum SFC &amp; PMI | DevSecOps | CyberSecurity Specialist | VMware vExpert 2026 | VMUG Team Leader | Editor TechNews Today | Broadcom Social Media Advocacy</div>
+            <div class="about-contact">
+              <a href="mailto:mario.tabuada@outlook.com">✉ mario.tabuada@outlook.com</a>
+              <span>📱 <span data-i18n="ab.mobile">Móvil</span> (+506): <a href="tel:+50687453670">8745-3670</a></span>
+              <span>🤖 <span data-i18n="ab.aiphone">AI Phone</span>: <a href="tel:+13012649324">+1 (301) 264-9324</a></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="gh-badges" id="ghBadges">
+          <span class="gh-badge"><span class="lb">email</span><span class="vl" style="background:#35c7f0;">mario.tabuada@outlook.com</span></span>
+          <span class="gh-badge"><span class="lb">mobile</span><span class="vl" style="background:#33d69f;">+506 8745-3670</span></span>
+          <span class="gh-badge"><span class="lb">vExpert</span><span class="vl" style="background:#8b5cf6;">2026</span></span>
+          <span class="gh-badge"><span class="lb">VMUG</span><span class="vl" style="background:#1a6fd6;">Team Leader</span></span>
+          <span class="gh-badge"><span class="lb">AWS</span><span class="vl" style="background:#f4b740;">EVS</span></span>
+          <span class="gh-badge"><span class="lb">Cisco</span><span class="vl" style="background:#00bceb;">CCNA + Sec</span></span>
+          <span class="gh-badge"><span class="lb">AVIXA</span><span class="vl" style="background:#e0784f;">CTS</span></span>
+          <span class="gh-badge"><span class="lb">PMI</span><span class="vl" style="background:#33d69f;">Scrum SFC</span></span>
+          <span class="gh-badge"><span class="lb">focus</span><span class="vl" style="background:#ff5d72;">DevSecOps</span></span>
+          <span class="gh-badge"><span class="lb">security</span><span class="vl" style="background:#7c6cff;">CyberSecurity Specialist</span></span>
+          <span class="gh-badge"><span class="lb">broadcom</span><span class="vl" style="background:#c9302c;">Social Media Advocacy</span></span>
+          <span class="gh-badge"><span class="lb">editor</span><span class="vl" style="background:#35c7f0;">TechNews Today</span></span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- LEGAL -->
+      <div>
+        <div class="section-label" data-i18n="ab.legalLabel">Legal y licencia</div>
+        <p class="lic-note" data-i18n="ab.legalIntro">Este proyecto se comparte como contribución abierta a la comunidad VMware by Broadcom. Se ofrece bajo doble licencia — elige la que mejor se ajuste a tu uso: MIT (permisiva) o GNU GPLv3 (copyleft).</p>
+        <div class="gh-badges" style="margin-top:10px; margin-bottom:12px;">
+          <span class="gh-badge"><span class="lb">license</span><span class="vl" style="background:#33d69f;">MIT</span></span>
+          <span class="gh-badge"><span class="lb">license</span><span class="vl" style="background:#1a6fd6;">GPL-3.0-or-later</span></span>
+          <span class="gh-badge"><span class="lb">PRs</span><span class="vl" style="background:#8b5cf6;">welcome</span></span>
+          <span class="gh-badge"><span class="lb">community</span><span class="vl" style="background:#f4b740; color:#04101f;">VMware by Broadcom</span></span>
+        </div>
+        <div class="seg" style="margin-bottom:10px;">
+          <button class="lic-tab active" data-lic="mit" onclick="setLicTab('mit')">MIT License</button>
+          <button class="lic-tab" data-lic="gpl" onclick="setLicTab('gpl')">GNU GPLv3</button>
+        </div>
+        <div class="lic-box" id="licBoxMIT">Copyright (c) 2026 Mario Tabuada Mussio
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.</div>
+        <div class="lic-box" id="licBoxGPL" style="display:none;">GNU GENERAL PUBLIC LICENSE — Version 3, 29 June 2007
+
+Copyright (c) 2026 Mario Tabuada Mussio
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see &lt;https://www.gnu.org/licenses/&gt;.
+
+Full text: https://www.gnu.org/licenses/gpl-3.0.txt</div>
+      </div>
+
+      <div class="about-foot">
+        <span data-i18n="ab.disclaimer">Herramienta no oficial · sin afiliación con Broadcom Inc. ni VMware · marcas de sus respectivos dueños.</span>
+        <span>© 2026 Mario Tabuada Mussio</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   I18N
+   ============================================================ */
+let lang = 'es';
+const I18N = {
+  es: {
+    'tb.tag':'Capacity planning & licencia por-core — no oficial',
+    'tb.optVVF':'Edición: vSphere Foundation (VVF)', 'tb.optVCF':'Edición: Cloud Foundation (VCF)', 'tb.optEdge':'Edición: Cloud Foundation Edge',
+    'tb.about':'Acerca de', 'tb.print':'Imprimir', 'tb.export':'Exportar', 'tb.recalc':'Recalcular',
+    'lg.legend':'Leyenda', 'lg.input':'Entrada editable', 'lg.result':'Resultado calculado', 'lg.money':'Costo monetario', 'lg.updated':'Actualizado: vCF/VVF 9.0.x · 9.1',
+    'hr.title1':'Capacidad máxima recomendada', 'hr.title2':'Cores con licencia requeridos', 'hr.title3':'Costo anual estimado',
+    'hr.physical':'Físicos', 'hr.sockets':'Sockets', 'hr.monthly':'Mensual', 'hr.years3':'3 años',
+    'hr.sub1':'VMs, limitado por <b style="color:#fff;">{bn}</b> · {vph} VMs/host',
+    'hr.sub2':'{ph} cores "fantasma" por mínimo de 16/CPU',
+    'hr.sub3':'≈ {cvm} / VM / año · referencial',
+    'u.hosts':'hosts', 'u.sockets':'sockets', 'u.cores':'cores', 'lbl.storage':'Storage',
+    'm1.h2':'1 · Infraestructura y perfil de VM',
+    'm1.desc':'Define el hardware físico del clúster y el tamaño estándar de máquina virtual. Estos valores alimentan tanto el cálculo de capacidad como el de licenciamiento (los sockets y cores por CPU determinan los cores facturables).',
+    'm1.card1':'Hosts físicos', 'm1.t1':'Servidores del clúster', 'm1.numHosts':'Número de hosts', 'm1.sockets':'CPUs (sockets) por host',
+    'm1.coresPS':'Cores físicos por CPU', 'm1.ramHost':'RAM por host', 'm1.storage':'Storage compartido total (vSAN/SAN)',
+    'm1.t2':'Reservas y overhead', 'm1.ha':'% Reserva HA (N+1/N+2)',
+    'm1.haTip':'N+1 (3 hosts)=33.33% · N+1 (4 hosts)=25% · N+1 (6 hosts)=16.67% · N+2 (4 hosts)=50% · Sin HA=0%',
+    'm1.ov':'% Overhead de hipervisor', 'm1.ovTip':'Rango típico 3–6% (ESXi + vSAN witness/metadata). Usa 0 para ignorarlo.',
+    'm1.presets':'Presets rápidos', 'm1.small':'Pequeño', 'm1.medium':'Mediano', 'm1.large':'Grande',
+    'm1.card2':'Perfil de VM estándar', 'm1.t3':'Tamaño de máquina virtual tipo', 'm1.vcpus':'vCPUs por VM', 'm1.ramVM':'RAM por VM',
+    'm1.diskVM':'Disco por VM (thick/aprovisionado)', 'm1.t4':'Overcommit de CPU', 'm1.ratio':'Ratio vCPU:pCPU',
+    'm1.ratioTip':'1:1 = sin overcommit. 1.5–2:1 = uso moderado recomendado por VMware en la mayoría de cargas de VVF/VCF. 2.5–4:1 = agresivo, solo cargas con bajo uso real de CPU.',
+    'm1.vsanCheck':'El storage compartido (A5) es capacidad <b>vSAN</b> (afecta el análisis de licenciamiento §3)',
+    'm2.h2':'2 · Resultados de capacidad', 'm2.tag':'CALCULADO',
+    'm2.card1':'Recursos del clúster', 'm2.t1':'Recursos brutos', 'm2.sockets':'Sockets totales', 'm2.cores':'Cores físicos totales',
+    'm2.ram':'RAM total', 'm2.storage':'Storage total', 'm2.t2':'Recursos usables (tras HA + overhead)',
+    'm2.ucores':'Cores usables', 'm2.uram':'RAM usable', 'm2.ustor':'Storage usable',
+    'm2.card2':'Capacidad máxima de VMs', 'm2.t3':'VMs máximas por recurso', 'm2.byCPU':'Por CPU', 'm2.byRAM':'Por RAM', 'm2.byStor':'Por Storage',
+    'm2.heroLabel':'B13 · Máximo de VMs recomendadas', 'm2.heroSub':'El menor de los tres recursos (cuello de botella)', 'm2.bottleneck':'Recurso limitante',
+    'm2.card3':'Utilización con máx. VMs', 'm2.card4':'Gráfico de utilización',
+    'm2.mini1':'vCPU:pCPU efectivo', 'm2.mini2':'VMs por host', 'm2.mini3':'RAM libre', 'm2.mini4':'Storage libre',
+    'm3.h2':'3 · Licenciamiento y costos por-core',
+    'm3.desc':'Desde vSphere Foundation/Cloud Foundation 9.0, Broadcom licencia <b>por core físico</b>, con un <b>mínimo de 16 cores por CPU física</b> (8 en VCF Edge) — un socket con menos cores se factura como si tuviera el mínimo. Los precios por core son <b>estimaciones de referencia</b>: Broadcom no publica lista pública; solicita cotización formal con tu partner autorizado.',
+    'm3.card1':'Cálculo de cores licenciables', 'm3.t1':'Regla oficial: mínimo por CPU física', 'm3.minCores':'Mínimo de cores/CPU (edición)',
+    'm3.licPS':'Cores licenciables por socket', 'm3.totalLic':'Total cores licenciables', 'm3.phantom':'Cores "fantasma" (pagados, no físicos)',
+    'm3.t2':'Precio de referencia (editable)', 'm3.priceVVF':'USD / core / año — VVF', 'm3.priceVCF':'USD / core / año — VCF', 'm3.priceEdge':'USD / core / año — VCF Edge',
+    'm3.priceTip':'Precios de lista aproximados reportados por partners/analistas de canal en 2026, no un precio oficial de Broadcom. Los descuentos empresariales negociados suelen ser 30–55% menores. Ajusta libremente estos campos con tu cotización real.',
+    'm3.card2':'Costo estimado — edición seleccionada', 'm3.annualLabel':'Costo anual de licencia (suscripción)',
+    'm3.costSub':'{cores} cores licenciados × {price} USD/core/año',
+    'm3.mini1':'Costo / VM / año', 'm3.mini2':'Total 3 años', 'm3.mini3':'Total 5 años',
+    'm3.t3':'Entitlement de vSAN incluido', 'm3.vsanPerCore':'TiB de vSAN por core (editable)', 'm3.vsanIncl':'Capacidad vSAN incluida', 'm3.vsanNeeded':'Storage solicitado (A5)',
+    'm3.cmpTitle':'Comparación de ediciones — mismo hardware', 'm3.needsNSX':'Requiero NSX / micro-segmentación / multi-tenant / HCX / automatización avanzada (Aria Automation)',
+    'm3.thEd':'Edición', 'm3.thCores':'Cores licenciados', 'm3.thCost':'Costo anual', 'm3.thCostVM':'Costo/VM/año', 'm3.thVsan':'vSAN incluido', 'm3.thAria':'Aria Automation',
+    'sc.title':'Comparación de escenarios de clúster', 'sc.tag':'Modo avanzado', 'sc.clusterA':'Clúster A', 'sc.clusterB':'Clúster B',
+    'sc.fHosts':'Hosts', 'sc.fSockets':'Sockets/host', 'sc.fCores':'Cores/CPU', 'sc.fRam':'RAM/host (GB)', 'sc.fStorage':'Storage (GB)',
+    'sc.thMetric':'Métrica', 'sc.thDiff':'Diferencia', 'sc.thBest':'Mejor',
+    'sc.totalCores':'Cores físicos totales', 'sc.totalRAM':'RAM total (GB)', 'sc.totalStorage':'Storage total (GB)', 'sc.usableCores':'Cores usables',
+    'sc.maxCPU':'Máx. VMs por CPU', 'sc.maxRAM':'Máx. VMs por RAM', 'sc.maxStorage':'Máx. VMs por Storage', 'sc.maxVMs':'MÁX. VMs RECOMENDADAS',
+    'sc.limiting':'Recurso limitante', 'sc.licCores':'Cores licenciables ({ed})', 'sc.annualCost':'Costo anual licencia', 'sc.costVM':'Costo / VM / año', 'sc.tie':'Igual',
+    'cc.h2':'4 · Centro de consulta', 'cc.tag':'AYUDA',
+    'cc.desc':'Prepara una pregunta con el contexto de tu cálculo actual y ábrela en Claude, o busca directamente la documentación oficial en Google — todo sin salir de esta página.',
+    'cc.claudeTitle':'Preguntar a Claude', 'cc.claudeSub':'Copia tu pregunta + el contexto del cálculo y abre una conversación nueva',
+    'cc.claudePh':'Ej: ¿Me conviene VVF o VCF para este clúster? ¿Cómo reduzco los cores fantasma?',
+    'cc.chip1':'VVF vs VCF para mi caso', 'cc.chip2':'Cores fantasma', 'cc.chip3':'Reducir costos', 'cc.chip4':'Revisar sizing',
+    'cc.q1':'¿Cuál es la diferencia real entre VVF y VCF para mi caso y cuál me conviene?',
+    'cc.q2':'Explícame cómo funciona el mínimo de 16 cores por CPU y cómo minimizar cores fantasma.',
+    'cc.q3':'Ayúdame a reducir el costo de licenciamiento de este clúster sin perder capacidad.',
+    'cc.q4':'Revisa si mi ratio de overcommit y reserva HA son razonables para producción.',
+    'cc.claudeBtn':'Copiar y abrir Claude',
+    'cc.claudeNote':'Copia la pregunta con el contexto de tu clúster al portapapeles y abre una pestaña nueva en claude.ai — pega ahí (Ctrl/Cmd+V) para enviarla.',
+    'cc.claudeNoteOk':'✓ Pregunta + contexto copiados al portapapeles. Se abrió una pestaña nueva en claude.ai — pega con Ctrl/Cmd+V y envía.',
+    'cc.claudeNoteFail':'No se pudo copiar automáticamente. Copia manualmente tu pregunta; se abrió claude.ai en una pestaña nueva.',
+    'cc.ctxTitle':'Contexto de mi clúster VMware (calculado con el Planificador VVF/VCF 9):',
+    'cc.ctxQ':'Mi pregunta: ', 'cc.ctxDefault':'¿Qué recomendaciones tienes para este clúster?',
+    'cc.googleTitle':'Buscar en Google', 'cc.googleSub':'Verifica cualquier dato contra la documentación oficial',
+    'cc.googlePh':'Ej: VMware Cloud Foundation 9.1 licensing overview',
+    'cc.gchip1':'Licensing Model (Broadcom)', 'cc.gchip2':'Comparativa de ediciones', 'cc.gchip3':'Guía de sizing vSAN', 'cc.gchip4':'FAQ oficial VCF 9.1',
+    'cc.googleBtn':'Buscar en Google', 'cc.googleNote':'Abre los resultados en una pestaña nueva de Google. Útil para confirmar precios, entitlements y novedades de licenciamiento directamente con Broadcom.',
+    'ft.h4':'Fuentes y precisión de los datos',
+    'ft.p1':'Las <b>reglas de licenciamiento por-core y el mínimo de 16 cores por CPU física</b> (8 para VCF Edge) provienen de la documentación técnica oficial de Broadcom. Los <b>precios por core</b> y los <b>entitlements de vSAN</b> son estimaciones de mercado reportadas por partners/analistas a 2026 — no son lista oficial de Broadcom y varían por región, volumen y negociación. Confirma siempre con tu representante o partner autorizado de Broadcom antes de presupuestar.',
+    'ft.p2':'Herramienta no oficial, sin afiliación con Broadcom Inc. ni VMware. Todas las marcas pertenecen a sus respectivos dueños.',
+    'ft.aboutLink':'Acerca del autor y licencia →',
+    'ab.title':'Acerca de este proyecto', 'ab.authorLabel':'Autor', 'ab.mobile':'Móvil', 'ab.aiphone':'AI Phone',
+    'ab.legalLabel':'Legal y licencia',
+    'ab.legalIntro':'Este proyecto se comparte como contribución abierta a la comunidad VMware by Broadcom. Se ofrece bajo doble licencia — elige la que mejor se ajuste a tu uso: MIT (permisiva) o GNU GPLv3 (copyleft).',
+    'ab.disclaimer':'Herramienta no oficial · sin afiliación con Broadcom Inc. ni VMware · marcas de sus respectivos dueños.',
+    'js.calculating':'Calculando…', 'js.bottleneckLbl':'Cuello de botella',
+    'js.phantomYes':'Pagas {n} cores que no existen físicamente porque al menos una CPU tiene menos de {min} cores. Sube a CPUs de {min}+ cores para eliminar este sobrecosto.',
+    'js.phantomNo':'Tus CPUs cumplen o superan el mínimo — no pagas cores fantasma.',
+    'js.vsanOff':'El storage no está marcado como vSAN — este análisis de entitlement no aplica a tu backend de almacenamiento.',
+    'js.vsanGap':'Necesitas {gap} TiB adicionales de vSAN (add-on por TiB) — tu entitlement incluido no cubre el storage solicitado.',
+    'js.vsanOk':'El entitlement de vSAN incluido en la licencia cubre el storage solicitado — no necesitas add-on adicional.',
+    'js.noNsx':' (sin NSX)',
+    'js.recNSX':'Marcaste que necesitas NSX/HCX/automatización avanzada → <b>{ed}</b> es la opción elegible más económica ({cost}/año).',
+    'js.recFree':'Sin requisitos de red avanzada, <b>{ed}</b> cubre la capacidad al menor costo ({cost}/año). Pasar de VVF a VCF cuesta {diff}/año adicionales ({pct}% más) a cambio de NSX, HCX y Aria Automation.',
+    'js.exportTitle':'PLANIFICADOR VVF/VCF 9 — RESUMEN DE CÁLCULO',
+    'js.exportInfra':'-- INFRAESTRUCTURA --', 'js.exportVM':'-- PERFIL DE VM --', 'js.exportCap':'-- CAPACIDAD --', 'js.exportLic':'-- LICENCIAMIENTO --',
+    'js.exportMaxVMs':'VMs máximas recomendadas', 'js.exportBottleneck':'Cuello de botella', 'js.exportUsage':'Uso CPU/RAM/Storage',
+    'js.exportEdition':'Edición', 'js.exportLicCores':'Cores licenciados', 'js.exportPhantom':'fantasma', 'js.exportAnnual':'Costo anual estimado',
+    'js.exportMonthly':'Mensual', 'js.export3y':'3 años', 'js.exportCostVM':'Costo por VM/año', 'js.exportNote':'Nota: precios de referencia, no oficiales. Confirma con tu partner Broadcom.',
+    'js.exportGenerated':'Generado'
+  },
+  en: {
+    'tb.tag':'Capacity planning & per-core licensing — unofficial tool',
+    'tb.optVVF':'Edition: vSphere Foundation (VVF)', 'tb.optVCF':'Edition: Cloud Foundation (VCF)', 'tb.optEdge':'Edition: Cloud Foundation Edge',
+    'tb.about':'About', 'tb.print':'Print', 'tb.export':'Export', 'tb.recalc':'Recalculate',
+    'lg.legend':'Legend', 'lg.input':'Editable input', 'lg.result':'Calculated result', 'lg.money':'Monetary cost', 'lg.updated':'Updated: VCF/VVF 9.0.x · 9.1',
+    'hr.title1':'Maximum recommended capacity', 'hr.title2':'Licensed cores required', 'hr.title3':'Estimated annual cost',
+    'hr.physical':'Physical', 'hr.sockets':'Sockets', 'hr.monthly':'Monthly', 'hr.years3':'3 years',
+    'hr.sub1':'VMs, limited by <b style="color:#fff;">{bn}</b> · {vph} VMs/host',
+    'hr.sub2':'{ph} "phantom" cores from the 16/CPU minimum',
+    'hr.sub3':'≈ {cvm} / VM / year · reference only',
+    'u.hosts':'hosts', 'u.sockets':'sockets', 'u.cores':'cores', 'lbl.storage':'Storage',
+    'm1.h2':'1 · Infrastructure & VM profile',
+    'm1.desc':'Define the cluster physical hardware and the standard virtual machine size. These values feed both the capacity and licensing calculations (sockets and cores per CPU determine the billable cores).',
+    'm1.card1':'Physical hosts', 'm1.t1':'Cluster servers', 'm1.numHosts':'Number of hosts', 'm1.sockets':'CPUs (sockets) per host',
+    'm1.coresPS':'Physical cores per CPU', 'm1.ramHost':'RAM per host', 'm1.storage':'Total shared storage (vSAN/SAN)',
+    'm1.t2':'Reserves & overhead', 'm1.ha':'% HA reserve (N+1/N+2)',
+    'm1.haTip':'N+1 (3 hosts)=33.33% · N+1 (4 hosts)=25% · N+1 (6 hosts)=16.67% · N+2 (4 hosts)=50% · No HA=0%',
+    'm1.ov':'% Hypervisor overhead', 'm1.ovTip':'Typical range 3–6% (ESXi + vSAN witness/metadata). Use 0 to ignore it.',
+    'm1.presets':'Quick presets', 'm1.small':'Small', 'm1.medium':'Medium', 'm1.large':'Large',
+    'm1.card2':'Standard VM profile', 'm1.t3':'Typical virtual machine size', 'm1.vcpus':'vCPUs per VM', 'm1.ramVM':'RAM per VM',
+    'm1.diskVM':'Disk per VM (thick-provisioned)', 'm1.t4':'CPU overcommit', 'm1.ratio':'vCPU:pCPU ratio',
+    'm1.ratioTip':'1:1 = no overcommit. 1.5–2:1 = moderate use, recommended by VMware for most VVF/VCF workloads. 2.5–4:1 = aggressive, only for workloads with low real CPU usage.',
+    'm1.vsanCheck':'Shared storage (A5) is <b>vSAN</b> capacity (affects the licensing analysis in §3)',
+    'm2.h2':'2 · Capacity results', 'm2.tag':'CALCULATED',
+    'm2.card1':'Cluster resources', 'm2.t1':'Raw resources', 'm2.sockets':'Total sockets', 'm2.cores':'Total physical cores',
+    'm2.ram':'Total RAM', 'm2.storage':'Total storage', 'm2.t2':'Usable resources (after HA + overhead)',
+    'm2.ucores':'Usable cores', 'm2.uram':'Usable RAM', 'm2.ustor':'Usable storage',
+    'm2.card2':'Maximum VM capacity', 'm2.t3':'Maximum VMs per resource', 'm2.byCPU':'By CPU', 'm2.byRAM':'By RAM', 'm2.byStor':'By Storage',
+    'm2.heroLabel':'B13 · Maximum recommended VMs', 'm2.heroSub':'The lowest of the three resources (bottleneck)', 'm2.bottleneck':'Limiting resource',
+    'm2.card3':'Utilization at max VMs', 'm2.card4':'Utilization chart',
+    'm2.mini1':'Effective vCPU:pCPU', 'm2.mini2':'VMs per host', 'm2.mini3':'Free RAM', 'm2.mini4':'Free storage',
+    'm3.h2':'3 · Licensing & per-core costs',
+    'm3.desc':'Starting with vSphere Foundation/Cloud Foundation 9.0, Broadcom licenses <b>per physical core</b>, with a <b>minimum of 16 cores per physical CPU</b> (8 for VCF Edge) — a socket with fewer cores is billed as if it had the minimum. Per-core prices are <b>reference estimates</b>: Broadcom does not publish a public price list; request a formal quote from your authorized partner.',
+    'm3.card1':'Licensable core calculation', 'm3.t1':'Official rule: minimum per physical CPU', 'm3.minCores':'Minimum cores/CPU (edition)',
+    'm3.licPS':'Licensable cores per socket', 'm3.totalLic':'Total licensable cores', 'm3.phantom':'"Phantom" cores (paid, not physical)',
+    'm3.t2':'Reference price (editable)', 'm3.priceVVF':'USD / core / year — VVF', 'm3.priceVCF':'USD / core / year — VCF', 'm3.priceEdge':'USD / core / year — VCF Edge',
+    'm3.priceTip':'Approximate list prices reported by channel partners/analysts as of 2026, not an official Broadcom price. Negotiated enterprise discounts are typically 30–55% lower. Adjust these fields freely to match your real quote.',
+    'm3.card2':'Estimated cost — selected edition', 'm3.annualLabel':'Annual license cost (subscription)',
+    'm3.costSub':'{cores} licensed cores × {price} USD/core/year',
+    'm3.mini1':'Cost / VM / year', 'm3.mini2':'Total 3 years', 'm3.mini3':'Total 5 years',
+    'm3.t3':'Included vSAN entitlement', 'm3.vsanPerCore':'vSAN TiB per core (editable)', 'm3.vsanIncl':'Included vSAN capacity', 'm3.vsanNeeded':'Requested storage (A5)',
+    'm3.cmpTitle':'Edition comparison — same hardware', 'm3.needsNSX':'I need NSX / micro-segmentation / multi-tenant / HCX / advanced automation (Aria Automation)',
+    'm3.thEd':'Edition', 'm3.thCores':'Licensed cores', 'm3.thCost':'Annual cost', 'm3.thCostVM':'Cost/VM/year', 'm3.thVsan':'vSAN included', 'm3.thAria':'Aria Automation',
+    'sc.title':'Cluster scenario comparison', 'sc.tag':'Advanced mode', 'sc.clusterA':'Cluster A', 'sc.clusterB':'Cluster B',
+    'sc.fHosts':'Hosts', 'sc.fSockets':'Sockets/host', 'sc.fCores':'Cores/CPU', 'sc.fRam':'RAM/host (GB)', 'sc.fStorage':'Storage (GB)',
+    'sc.thMetric':'Metric', 'sc.thDiff':'Difference', 'sc.thBest':'Best',
+    'sc.totalCores':'Total physical cores', 'sc.totalRAM':'Total RAM (GB)', 'sc.totalStorage':'Total storage (GB)', 'sc.usableCores':'Usable cores',
+    'sc.maxCPU':'Max VMs by CPU', 'sc.maxRAM':'Max VMs by RAM', 'sc.maxStorage':'Max VMs by Storage', 'sc.maxVMs':'MAX RECOMMENDED VMs',
+    'sc.limiting':'Limiting resource', 'sc.licCores':'Licensable cores ({ed})', 'sc.annualCost':'Annual license cost', 'sc.costVM':'Cost / VM / year', 'sc.tie':'Tie',
+    'cc.h2':'4 · Help center', 'cc.tag':'HELP',
+    'cc.desc':'Prepare a question with your current calculation context and open it in Claude, or search the official documentation directly on Google — all without leaving this page.',
+    'cc.claudeTitle':'Ask Claude', 'cc.claudeSub':'Copy your question + the calculation context and open a new conversation',
+    'cc.claudePh':'E.g.: Should I use VVF or VCF for this cluster? How do I reduce phantom cores?',
+    'cc.chip1':'VVF vs VCF for my case', 'cc.chip2':'Phantom cores', 'cc.chip3':'Reduce costs', 'cc.chip4':'Review sizing',
+    'cc.q1':'What is the real difference between VVF and VCF for my case, and which one should I use?',
+    'cc.q2':'Explain how the 16-core-per-CPU minimum works and how to minimize phantom cores.',
+    'cc.q3':'Help me reduce the licensing cost of this cluster without losing capacity.',
+    'cc.q4':'Review whether my overcommit ratio and HA reserve are reasonable for production.',
+    'cc.claudeBtn':'Copy & open Claude',
+    'cc.claudeNote':'Copy the question with your cluster context to the clipboard and open a new tab at claude.ai — paste it there (Ctrl/Cmd+V) to send it.',
+    'cc.claudeNoteOk':'✓ Question + context copied to clipboard. A new claude.ai tab was opened — paste with Ctrl/Cmd+V and send.',
+    'cc.claudeNoteFail':'Could not copy automatically. Copy your question manually; claude.ai was opened in a new tab.',
+    'cc.ctxTitle':'Context of my VMware cluster (calculated with the VVF/VCF 9 Planner):',
+    'cc.ctxQ':'My question: ', 'cc.ctxDefault':'What recommendations do you have for this cluster?',
+    'cc.googleTitle':'Search Google', 'cc.googleSub':'Verify any figure against the official documentation',
+    'cc.googlePh':'E.g.: VMware Cloud Foundation 9.1 licensing overview',
+    'cc.gchip1':'Licensing Model (Broadcom)', 'cc.gchip2':'Edition comparison', 'cc.gchip3':'vSAN sizing guide', 'cc.gchip4':'Official VCF 9.1 FAQ',
+    'cc.googleBtn':'Search Google', 'cc.googleNote':'Opens results in a new Google tab. Useful for confirming prices, entitlements, and licensing news directly with Broadcom.',
+    'ft.h4':'Sources & data accuracy',
+    'ft.p1':'The <b>per-core licensing rules and the 16-core-per-physical-CPU minimum</b> (8 for VCF Edge) come from Broadcom official technical documentation. <b>Per-core prices</b> and <b>vSAN entitlements</b> are market estimates reported by partners/analysts as of 2026 — they are not an official Broadcom price list and vary by region, volume, and negotiation. Always confirm with your Broadcom representative or authorized partner before budgeting.',
+    'ft.p2':'Unofficial tool, not affiliated with Broadcom Inc. or VMware. All trademarks belong to their respective owners.',
+    'ft.aboutLink':'About the author & license →',
+    'ab.title':'About this project', 'ab.authorLabel':'Author', 'ab.mobile':'Mobile', 'ab.aiphone':'AI Phone',
+    'ab.legalLabel':'Legal & license',
+    'ab.legalIntro':'This project is shared as an open contribution to the VMware by Broadcom community. It is offered under a dual license — pick whichever suits your use: MIT (permissive) or GNU GPLv3 (copyleft).',
+    'ab.disclaimer':'Unofficial tool · not affiliated with Broadcom Inc. or VMware · trademarks belong to their respective owners.',
+    'js.calculating':'Calculating…', 'js.bottleneckLbl':'Bottleneck',
+    'js.phantomYes':'You are paying for {n} cores that do not physically exist because at least one CPU has fewer than {min} cores. Upgrade to {min}+-core CPUs to eliminate this overcharge.',
+    'js.phantomNo':'Your CPUs meet or exceed the minimum — you are not paying for phantom cores.',
+    'js.vsanOff':'Storage is not marked as vSAN — this entitlement analysis does not apply to your storage backend.',
+    'js.vsanGap':'You need {gap} additional TiB of vSAN (per-TiB add-on) — your included entitlement does not cover the requested storage.',
+    'js.vsanOk':'The vSAN entitlement included with the license covers the requested storage — no additional add-on needed.',
+    'js.noNsx':' (no NSX)',
+    'js.recNSX':'You marked that you need NSX/HCX/advanced automation → <b>{ed}</b> is the cheapest eligible option ({cost}/year).',
+    'js.recFree':'Without advanced networking requirements, <b>{ed}</b> covers the capacity at the lowest cost ({cost}/year). Moving from VVF to VCF costs an extra {diff}/year ({pct}% more) in exchange for NSX, HCX, and Aria Automation.',
+    'js.exportTitle':'VVF/VCF 9 PLANNER — CALCULATION SUMMARY',
+    'js.exportInfra':'-- INFRASTRUCTURE --', 'js.exportVM':'-- VM PROFILE --', 'js.exportCap':'-- CAPACITY --', 'js.exportLic':'-- LICENSING --',
+    'js.exportMaxVMs':'Maximum recommended VMs', 'js.exportBottleneck':'Bottleneck', 'js.exportUsage':'CPU/RAM/Storage usage',
+    'js.exportEdition':'Edition', 'js.exportLicCores':'Licensed cores', 'js.exportPhantom':'phantom', 'js.exportAnnual':'Estimated annual cost',
+    'js.exportMonthly':'Monthly', 'js.export3y':'3 years', 'js.exportCostVM':'Cost per VM/year', 'js.exportNote':'Note: reference prices, not official. Confirm with your Broadcom partner.',
+    'js.exportGenerated':'Generated'
+  }
+};
+function t(key, vars){
+  let s = (I18N[lang] && I18N[lang][key] !== undefined) ? I18N[lang][key] : (I18N.es[key] !== undefined ? I18N.es[key] : key);
+  if (vars){ Object.keys(vars).forEach(k => { s = s.split('{'+k+'}').join(vars[k]); }); }
+  return s;
+}
+function applyStaticI18n(){
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (/<[a-z][\s\S]*>/i.test(val)) el.innerHTML = val; else el.textContent = val;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ el.placeholder = t(el.getAttribute('data-i18n-ph')); });
+  document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'es');
+}
+function setLang(l){
+  lang = l;
+  try{ localStorage.setItem('vvfvcf_lang', l); }catch(e){}
+  document.querySelectorAll('.lang-btn').forEach(b=> b.classList.toggle('active', b.dataset.lang===l));
+  applyStaticI18n();
+  recalcAll();
+}
+
+/* ============================================================
+   ESTADO / STATE
+   ============================================================ */
+let overcommit = 2.0;
+const EDITIONS = {
+  vvf:      { label:'vSphere Foundation (VVF)', minCores:16, priceId:'priceVVF', defaultPrice:135, defaultVsan:0.25, nsx:false, hcx:false, aria:false },
+  vcf:      { label:'Cloud Foundation (VCF)',    minCores:16, priceId:'priceVCF', defaultPrice:350, defaultVsan:1,    nsx:true,  hcx:true,  aria:true  },
+  'vcf-edge': { label:'Cloud Foundation Edge',   minCores:8,  priceId:'priceEdge', defaultPrice:240, defaultVsan:0.25, nsx:true, hcx:false, aria:false }
+};
+
+function getVal(id){ return parseFloat(document.getElementById(id).value) || 0; }
+function fmtInt(n){ return Math.round(n).toLocaleString('en-US'); }
+function fmtNum(n,d=1){ return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtUSD(n){
+  if (n>=1000000) return '$'+(n/1000000).toFixed(2)+'M';
+  return '$'+n.toLocaleString('en-US',{maximumFractionDigits:0});
+}
+function setText(id, val){ const el=document.getElementById(id); if(el) el.textContent = val; }
+
+/* ============================================================
+   CAPACITY ENGINE (compartido entre panel principal y escenarios)
+   ============================================================ */
+function calcCapacity(hosts, sockets, coresPerSocket, ramPerHost, storage, haPct, ovPct, vcpus, ramVM, diskVM, oc){
+  const totalSockets   = hosts * sockets;
+  const totalCores     = totalSockets * coresPerSocket;
+  const totalRAM       = hosts * ramPerHost;
+  const totalStorage   = storage;
+  const reserve        = (haPct/100) + (ovPct/100);
+  const usableCores    = totalCores   * (1 - reserve);
+  const usableRAM      = totalRAM     * (1 - reserve);
+  const usableStorage  = totalStorage * (1 - ovPct/100);
+  const maxByCPU       = Math.floor((usableCores / vcpus) * oc);
+  const maxByRAM       = Math.floor(usableRAM / ramVM);
+  const maxByStorage   = Math.floor(usableStorage / diskVM);
+  const maxVMs         = Math.max(0, Math.min(maxByCPU, maxByRAM, maxByStorage));
+  const bottleneck     = maxByCPU===maxVMs ? 'CPU' : (maxByRAM===maxVMs ? 'RAM' : 'Storage');
+  const consumoCPU     = maxVMs * vcpus;
+  const consumoRAM     = maxVMs * ramVM;
+  const consumoStorage = maxVMs * diskVM;
+  const pctCPU     = usableCores   > 0 ? (consumoCPU/usableCores)*100     : 0;
+  const pctRAM     = usableRAM     > 0 ? (consumoRAM/usableRAM)*100       : 0;
+  const pctStorage = usableStorage > 0 ? (consumoStorage/usableStorage)*100 : 0;
+  return { totalSockets, totalCores, totalRAM, totalStorage, usableCores, usableRAM, usableStorage,
+           maxByCPU, maxByRAM, maxByStorage, maxVMs, bottleneck, consumoCPU, consumoRAM, consumoStorage,
+           pctCPU, pctRAM, pctStorage };
+}
+
+/* ============================================================
+   LICENSING ENGINE
+   ============================================================ */
+function calcLicense(totalSockets, totalCores, coresPerSocket, editionKey, priceOverride, vsanEntOverride){
+  const ed = EDITIONS[editionKey];
+  const minCores = ed.minCores;
+  const licPerSocket = Math.max(coresPerSocket, minCores);
+  const totalLicCores = totalSockets * licPerSocket;
+  const phantom = Math.max(0, totalLicCores - totalCores);
+  const price = (priceOverride !== undefined) ? priceOverride : ed.defaultPrice;
+  const annualCost = totalLicCores * price;
+  const vsanEnt = (vsanEntOverride !== undefined) ? vsanEntOverride : ed.defaultVsan;
+  const vsanIncludedTiB = totalLicCores * vsanEnt;
+  return { minCores, licPerSocket, totalLicCores, phantom, price, annualCost, vsanEnt, vsanIncludedTiB, ...ed };
+}
+
+/* ============================================================
+   RENDER: barras / chart / status (compartido)
+   ============================================================ */
+function paintBar(barId, labelId, pct){
+  const bar = document.getElementById(barId), lbl = document.getElementById(labelId);
+  const capped = Math.min(pct, 100);
+  if (bar){ bar.style.width = capped+'%'; bar.classList.remove('warnfill','badfill');
+    if (pct>=90) bar.classList.add('badfill'); else if (pct>=70) bar.classList.add('warnfill'); }
+  if (lbl){ lbl.textContent = pct.toFixed(1)+'%'; lbl.style.color = pct>=90?'var(--bad)':pct>=70?'var(--warn)':''; }
+}
+function paintResult(id, pct){
+  const el = document.getElementById(id); if(!el) return;
+  el.classList.remove('warn','bad');
+  if (pct>=90) el.classList.add('bad'); else if (pct>=70) el.classList.add('warn');
+}
+
+/* ============================================================
+   MAIN CALCULATION
+   ============================================================ */
+function recalcAll(){
+  const numHosts   = getVal('numHosts');
+  const sockets    = getVal('socketsPerHost');
+  const coresPS    = getVal('coresPerSocket');
+  const ramHost    = getVal('ramPerHost');
+  const storage    = getVal('storageTotal');
+  const ha         = getVal('haReserve');
+  const ov         = getVal('hypervisorOverhead');
+  const vcpus      = getVal('vcpusPerVM');
+  const ramVM      = getVal('ramPerVM');
+  const diskVM     = getVal('diskPerVM');
+
+  const r = calcCapacity(numHosts, sockets, coresPS, ramHost, storage, ha, ov, vcpus, ramVM, diskVM, overcommit);
+
+  setText('totalSockets', fmtInt(r.totalSockets));
+  setText('totalCores',   fmtInt(r.totalCores));
+  setText('totalRAM',     fmtInt(r.totalRAM)+' GB');
+  setText('totalStorage', fmtInt(r.totalStorage)+' GB');
+  setText('usableCores',   fmtNum(r.usableCores));
+  setText('usableRAM',     fmtNum(r.usableRAM)+' GB');
+  setText('usableStorage', fmtNum(r.usableStorage)+' GB');
+  setText('maxByCPU', fmtInt(r.maxByCPU));
+  setText('maxByRAM', fmtInt(r.maxByRAM));
+  setText('maxByStorage', fmtInt(r.maxByStorage));
+  setText('maxVMs', fmtInt(r.maxVMs));
+
+  const bb = document.getElementById('bottleneckBadge');
+  bb.textContent = r.bottleneck; bb.className = 'badge ' + r.bottleneck.toLowerCase();
+
+  paintBar('barCPU','pctCPULabel', r.pctCPU);
+  paintBar('barRAM','pctRAMLabel', r.pctRAM);
+  paintBar('barStorage','pctStorageLabel', r.pctStorage);
+  paintResult('maxByCPU', r.pctCPU); paintResult('maxByRAM', r.pctRAM); paintResult('maxByStorage', r.pctStorage);
+
+  const clamp = v=>Math.min(v,100);
+  document.getElementById('chartCPU').style.height = clamp(r.pctCPU)+'%';
+  document.getElementById('chartRAM').style.height = clamp(r.pctRAM)+'%';
+  document.getElementById('chartStorage').style.height = clamp(r.pctStorage)+'%';
+  setText('chartCPUPct', r.pctCPU.toFixed(1)+'%');
+  setText('chartRAMPct', r.pctRAM.toFixed(1)+'%');
+  setText('chartStorPct', r.pctStorage.toFixed(1)+'%');
+
+  const vcpuRatio = r.totalCores>0 ? (r.consumoCPU/r.totalCores).toFixed(2) : '-';
+  setText('vcpuRatio', vcpuRatio+':1');
+  setText('vmsPerHost', numHosts>0 ? (r.maxVMs/numHosts).toFixed(1) : '-');
+  setText('ramFree', fmtInt(r.usableRAM - r.consumoRAM)+' GB');
+  setText('storageFree', fmtInt(r.usableStorage - r.consumoStorage)+' GB');
+
+  const statusRow = document.getElementById('statusRow');
+  const parts = [
+    {label:'CPU '+r.pctCPU.toFixed(1)+'%', lvl:r.pctCPU},
+    {label:'RAM '+r.pctRAM.toFixed(1)+'%', lvl:r.pctRAM},
+    {label:'STOR '+r.pctStorage.toFixed(1)+'%', lvl:r.pctStorage},
+    {label:t('js.bottleneckLbl')+': '+r.bottleneck, lvl:-1}
+  ];
+  statusRow.innerHTML = parts.map(p=>{
+    const d = p.lvl<0?'g':p.lvl>=90?'r':p.lvl>=70?'y':'g';
+    return `<div class="chip"><div class="dot ${d}"></div>${p.label}</div>`;
+  }).join('');
+
+  /* HERO */
+  setText('heroMaxVMs', fmtInt(r.maxVMs));
+  document.getElementById('heroSub1').innerHTML = t('hr.sub1', { bn:r.bottleneck, vph: (numHosts>0?(r.maxVMs/numHosts).toFixed(1):'-') });
+  setText('heroPctCPU', r.pctCPU.toFixed(0)+'%');
+  setText('heroPctRAM', r.pctRAM.toFixed(0)+'%');
+  setText('heroPctStor', r.pctStorage.toFixed(0)+'%');
+  setText('heroPhysCores', fmtInt(r.totalCores));
+  setText('heroSockets', fmtInt(r.totalSockets));
+
+  /* ---------------- LICENSING ---------------- */
+  const editionKey = document.getElementById('editionSelect').value;
+  const ed = EDITIONS[editionKey];
+  setText('minCoresPerSocket', ed.minCores);
+  setText('selEditionMeta', editionKey.toUpperCase());
+  setText('heroEditionLabel', editionKey==='vcf-edge' ? 'VCF Edge' : editionKey.toUpperCase());
+
+  const price = getVal(ed.priceId);
+  const vsanEnt = getVal('vsanEntCur');
+  const lic = calcLicense(r.totalSockets, r.totalCores, coresPS, editionKey, price, vsanEnt);
+
+  setText('licPerSocket', fmtInt(lic.licPerSocket));
+  setText('totalLicCores', fmtInt(lic.totalLicCores));
+  setText('phantomCores', fmtInt(lic.phantom));
+  setText('phantomTip', lic.phantom>0 ? t('js.phantomYes',{n:fmtInt(lic.phantom), min:lic.minCores}) : t('js.phantomNo'));
+  setText('annualCost', fmtUSD(lic.annualCost));
+  document.getElementById('costSubLine').innerHTML = t('m3.costSub', {cores: fmtInt(lic.totalLicCores), price: fmtNum(price,0)});
+  setText('monthlyCost', fmtUSD(lic.annualCost/12));
+  setText('costPerVM', r.maxVMs>0 ? fmtUSD(lic.annualCost/r.maxVMs) : '–');
+  setText('cost3y', fmtUSD(lic.annualCost*3));
+  setText('cost5y', fmtUSD(lic.annualCost*5));
+
+  setText('heroLicCores', fmtInt(lic.totalLicCores));
+  document.getElementById('heroSub2').textContent = t('hr.sub2', {ph: fmtInt(lic.phantom)});
+  setText('heroCost', fmtUSD(lic.annualCost));
+  document.getElementById('heroSub3').textContent = t('hr.sub3', {cvm: (r.maxVMs>0 ? fmtUSD(lic.annualCost/r.maxVMs) : '–')});
+  setText('heroCostMonth', fmtUSD(lic.annualCost/12));
+  setText('heroCost3y', fmtUSD(lic.annualCost*3));
+
+  const vsanNeededTiB = r.totalStorage/1024;
+  setText('vsanIncluded', fmtNum(lic.vsanIncludedTiB,2)+' TiB');
+  setText('vsanNeeded', fmtNum(vsanNeededTiB,2)+' TiB');
+  const useVsan = document.getElementById('useVsanStorage').checked;
+  const gapTip = document.getElementById('vsanGapTip');
+  if (!useVsan){
+    gapTip.className = 'tip'; gapTip.textContent = t('js.vsanOff');
+  } else if (vsanNeededTiB > lic.vsanIncludedTiB){
+    const gap = vsanNeededTiB - lic.vsanIncludedTiB;
+    gapTip.className = 'tip tip-warn'; gapTip.textContent = t('js.vsanGap', {gap: fmtNum(gap,2)});
+  } else {
+    gapTip.className = 'tip tip-good'; gapTip.textContent = t('js.vsanOk');
+  }
+
+  renderComparison(r, coresPS);
+  calcScenarios();
+}
+
+/* ============================================================
+   COMPARISON TABLE — VVF vs VCF vs VCF Edge (mismo hardware)
+   ============================================================ */
+function renderComparison(r, coresPS){
+  const needsNSX = document.getElementById('needsNSX').checked;
+  const rows = [];
+  let cheapestKey = null, cheapestCost = Infinity;
+  Object.keys(EDITIONS).forEach(key=>{
+    const priceField = EDITIONS[key].priceId;
+    const price = getVal(priceField);
+    const vsanEnt = EDITIONS[key].defaultVsan;
+    const lic = calcLicense(r.totalSockets, r.totalCores, coresPS, key, price, vsanEnt);
+    rows.push({key, lic});
+    const eligible = !needsNSX || lic.nsx;
+    if (eligible && lic.annualCost < cheapestCost){ cheapestCost = lic.annualCost; cheapestKey = key; }
+  });
+
+  const tbody = document.getElementById('cmpTableBody');
+  tbody.innerHTML = rows.map(({key,lic})=>{
+    const rec = key===cheapestKey;
+    const disabledByNSX = needsNSX && !lic.nsx;
+    return `<tr class="${rec?'recommended':''}">
+      <td style="color:var(--text);font-weight:700;${disabledByNSX?'opacity:.45;':''}">${lic.label}${rec?' ★':''}</td>
+      <td>${fmtInt(lic.totalLicCores)}</td>
+      <td class="${rec?'best-cost':''}">${fmtUSD(lic.annualCost)}${disabledByNSX?' <span style="color:var(--bad);font-size:0.65rem;">'+t('js.noNsx')+'</span>':''}</td>
+      <td>${r.maxVMs>0?fmtUSD(lic.annualCost/r.maxVMs):'–'}</td>
+      <td>${fmtNum(lic.vsanIncludedTiB,1)} TiB</td>
+      <td class="${lic.nsx?'yes':'no'}">${lic.nsx?'✓':'—'}</td>
+      <td class="${lic.hcx?'yes':'no'}">${lic.hcx?'✓':'—'}</td>
+      <td class="${lic.aria?'yes':'no'}">${lic.aria?'✓':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const recLic = rows.find(x=>x.key===cheapestKey).lic;
+  const vvfLic = rows.find(x=>x.key==='vvf').lic;
+  const vcfLic = rows.find(x=>x.key==='vcf').lic;
+  const diff = vcfLic.annualCost - vvfLic.annualCost;
+  let msg = needsNSX
+    ? t('js.recNSX', {ed: recLic.label, cost: fmtUSD(recLic.annualCost)})
+    : t('js.recFree', {ed: recLic.label, cost: fmtUSD(recLic.annualCost), diff: fmtUSD(diff), pct: fmtNum((vcfLic.annualCost/Math.max(vvfLic.annualCost,1)-1)*100,0)});
+  document.getElementById('recommendationTip').innerHTML = msg;
+}
+
+/* ============================================================
+   SCENARIO A/B (capacidad)
+   ============================================================ */
+function calcScenarios(){
+  const vcpus = getVal('vcpusPerVM'), ramVM = getVal('ramPerVM'), diskVM = getVal('diskPerVM');
+  const ha = getVal('haReserve'), ov = getVal('hypervisorOverhead');
+  const A = calcCapacity(getVal('cA_hosts'), getVal('cA_sockets'), getVal('cA_cores'), getVal('cA_ram'), getVal('cA_storage'), ha, ov, vcpus, ramVM, diskVM, overcommit);
+  const B = calcCapacity(getVal('cB_hosts'), getVal('cB_sockets'), getVal('cB_cores'), getVal('cB_ram'), getVal('cB_storage'), ha, ov, vcpus, ramVM, diskVM, overcommit);
+  const editionKey = document.getElementById('editionSelect').value;
+  const price = getVal(EDITIONS[editionKey].priceId);
+  const licA = calcLicense(A.totalSockets, A.totalCores, getVal('cA_cores'), editionKey, price);
+  const licB = calcLicense(B.totalSockets, B.totalCores, getVal('cB_cores'), editionKey, price);
+
+  const rows = [
+    [t('sc.totalCores'), A.totalCores, B.totalCores, 'lowerBad', false],
+    [t('sc.totalRAM'), A.totalRAM, B.totalRAM, 'lowerBad', false],
+    [t('sc.totalStorage'), A.totalStorage, B.totalStorage, 'lowerBad', false],
+    [t('sc.usableCores'), A.usableCores.toFixed(1), B.usableCores.toFixed(1), 'lowerBad', false],
+    [t('sc.maxCPU'), A.maxByCPU, B.maxByCPU, 'higherGood', false],
+    [t('sc.maxRAM'), A.maxByRAM, B.maxByRAM, 'higherGood', false],
+    [t('sc.maxStorage'), A.maxByStorage, B.maxByStorage, 'higherGood', false],
+    [t('sc.maxVMs'), A.maxVMs, B.maxVMs, 'higherGood', true],
+    [t('sc.limiting'), A.bottleneck, B.bottleneck, 'text', false],
+    [t('sc.licCores',{ed:editionKey.toUpperCase()}), licA.totalLicCores, licB.totalLicCores, 'lowerBad', false],
+    [t('sc.annualCost'), fmtUSD(licA.annualCost), fmtUSD(licB.annualCost), 'costText', false],
+    [t('sc.costVM'), A.maxVMs>0?fmtUSD(licA.annualCost/A.maxVMs):'–', B.maxVMs>0?fmtUSD(licB.annualCost/B.maxVMs):'–', 'text', false],
+  ];
+
+  const tbody = document.getElementById('scnTableBody');
+  tbody.innerHTML = rows.map(([label,vA,vB,mode,isMax])=>{
+    let diff='-', best='-', clsA='', clsB='';
+    if (mode==='higherGood' || mode==='lowerBad'){
+      const nA=parseFloat(vA), nB=parseFloat(vB);
+      diff = (nB-nA)>=0 ? '+'+fmtInt(nB-nA) : fmtInt(nB-nA);
+      const aWins = mode==='higherGood' ? nA>nB : nA<nB;
+      const bWins = mode==='higherGood' ? nB>nA : nB<nA;
+      best = aWins ? '<span style="color:var(--accent)">'+t('sc.clusterA')+'</span>' : bWins ? '<span style="color:var(--good)">'+t('sc.clusterB')+'</span>' : '<span style="color:var(--text-mute)">'+t('sc.tie')+'</span>';
+      if (isMax){ clsA = aWins?'hl':''; clsB = bWins?'hl':''; }
+    } else if (mode==='costText'){
+      const nA = parseFloat(vA.replace(/[^0-9.]/g,'')), nB = parseFloat(vB.replace(/[^0-9.]/g,''));
+      diff = nB>=nA ? '+'+fmtUSD(nB-nA) : '-'+fmtUSD(nA-nB);
+      best = nA<nB ? '<span style="color:var(--accent)">'+t('sc.clusterA')+'</span>' : nB<nA ? '<span style="color:var(--good)">'+t('sc.clusterB')+'</span>' : '<span style="color:var(--text-mute)">'+t('sc.tie')+'</span>';
+    }
+    const rowStyle = isMax ? 'style="font-weight:800; border-top:1px solid var(--border-bright);"' : '';
+    return `<tr ${rowStyle}><td style="color:var(--text-dim);">${label}</td><td class="${clsA}">${vA}</td><td class="${clsB}">${vB}</td><td style="color:var(--text-mute);">${diff}</td><td>${best}</td></tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   INTERACTIONS
+   ============================================================ */
+function syncOvercommit(v){
+  overcommit = parseFloat(v) || 1;
+  document.getElementById('overcommitSlider').value = overcommit;
+  document.getElementById('overcommitRatio').value = overcommit;
+  recalcAll();
+}
+function onEditionChange(){
+  const key = document.getElementById('editionSelect').value;
+  document.getElementById('vsanEntCur').value = EDITIONS[key].defaultVsan;
+  recalcAll();
+}
+function applyPreset(size){
+  const presets = {
+    s:{hosts:3, sockets:2, cores:12, ram:384, storage:8192, vcpus:4, ramVM:16, disk:100},
+    m:{hosts:8, sockets:2, cores:16, ram:512, storage:24576, vcpus:4, ramVM:16, disk:120},
+    l:{hosts:20, sockets:2, cores:32, ram:1024, storage:65536, vcpus:8, ramVM:32, disk:200}
+  };
+  const p = presets[size];
+  document.getElementById('numHosts').value = p.hosts;
+  document.getElementById('socketsPerHost').value = p.sockets;
+  document.getElementById('coresPerSocket').value = p.cores;
+  document.getElementById('ramPerHost').value = p.ram;
+  document.getElementById('storageTotal').value = p.storage;
+  document.getElementById('vcpusPerVM').value = p.vcpus;
+  document.getElementById('ramPerVM').value = p.ramVM;
+  document.getElementById('diskPerVM').value = p.disk;
+  recalcAll();
+}
+
+/* ---------------- Claude consult box ---------------- */
+function fillClaude(text){ document.getElementById('claudeQuestion').value = text; }
+function buildClaudeContext(){
+  const editionKey = document.getElementById('editionSelect').value;
+  return `${t('cc.ctxTitle')}
+- ${t('m1.numHosts')}: ${getVal('numHosts')} | ${t('m1.sockets')}: ${getVal('socketsPerHost')} | ${t('m1.coresPS')}: ${getVal('coresPerSocket')} | ${t('m1.ramHost')}: ${getVal('ramPerHost')} GB
+- ${t('m1.storage')}: ${getVal('storageTotal')} GB | ${t('m1.ha')}: ${getVal('haReserve')}% | ${t('m1.ov')}: ${getVal('hypervisorOverhead')}%
+- VM: ${getVal('vcpusPerVM')} vCPU / ${getVal('ramPerVM')} GB RAM / ${getVal('diskPerVM')} GB | Overcommit: ${overcommit}:1
+- ${t('m2.heroLabel')}: ${document.getElementById('maxVMs').textContent} (${t('m2.bottleneck')}: ${document.getElementById('bottleneckBadge').textContent})
+- ${t('m3.card2')}: ${EDITIONS[editionKey].label} | ${t('m3.totalLic')}: ${document.getElementById('totalLicCores').textContent} | ${t('m3.annualLabel')}: ${document.getElementById('annualCost').textContent}
+
+${t('cc.ctxQ')}`;
+}
+async function askClaude(){
+  const q = document.getElementById('claudeQuestion').value.trim() || t('cc.ctxDefault');
+  const fullText = buildClaudeContext() + q;
+  const note = document.getElementById('claudeNote');
+  try{
+    await navigator.clipboard.writeText(fullText);
+    note.textContent = t('cc.claudeNoteOk'); note.style.color = 'var(--good)';
+  }catch(e){
+    note.textContent = t('cc.claudeNoteFail'); note.style.color = 'var(--warn)';
+  }
+  window.open('https://claude.ai/new', '_blank', 'noopener');
+}
+
+/* ---------------- Google search box ---------------- */
+function fillGoogle(text){ document.getElementById('googleQuery').value = text; }
+function doGoogleSearch(){
+  const q = document.getElementById('googleQuery').value.trim();
+  if (!q) return;
+  window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
+}
+
+/* ---------------- Export report ---------------- */
+async function exportReport(){
+  const editionKey = document.getElementById('editionSelect').value;
+  const lines = [
+    t('js.exportTitle'), '='.repeat(50), '',
+    t('js.exportInfra'),
+    `${t('m1.numHosts')}: ${getVal('numHosts')} | ${t('m1.sockets')}: ${getVal('socketsPerHost')} | ${t('m1.coresPS')}: ${getVal('coresPerSocket')} | ${t('m1.ramHost')}: ${getVal('ramPerHost')} GB`,
+    `${t('m1.storage')}: ${getVal('storageTotal')} GB | ${t('m1.ha')}: ${getVal('haReserve')}% | ${t('m1.ov')}: ${getVal('hypervisorOverhead')}%`, '',
+    t('js.exportVM'),
+    `vCPU: ${getVal('vcpusPerVM')} | RAM: ${getVal('ramPerVM')} GB | Disk: ${getVal('diskPerVM')} GB | Overcommit: ${overcommit}:1`, '',
+    t('js.exportCap'),
+    `${t('js.exportMaxVMs')}: ${document.getElementById('maxVMs').textContent}`,
+    `${t('js.exportBottleneck')}: ${document.getElementById('bottleneckBadge').textContent}`,
+    `${t('js.exportUsage')}: ${document.getElementById('pctCPULabel').textContent} / ${document.getElementById('pctRAMLabel').textContent} / ${document.getElementById('pctStorageLabel').textContent}`, '',
+    t('js.exportLic'),
+    `${t('js.exportEdition')}: ${EDITIONS[editionKey].label}`,
+    `${t('js.exportLicCores')}: ${document.getElementById('totalLicCores').textContent} (${t('js.exportPhantom')}: ${document.getElementById('phantomCores').textContent})`,
+    `${t('js.exportAnnual')}: ${document.getElementById('annualCost').textContent} | ${t('js.exportMonthly')}: ${document.getElementById('monthlyCost').textContent} | ${t('js.export3y')}: ${document.getElementById('cost3y').textContent}`,
+    `${t('js.exportCostVM')}: ${document.getElementById('costPerVM').textContent}`, '',
+    t('js.exportNote'),
+    `${t('js.exportGenerated')}: ${new Date().toLocaleString(lang==='en'?'en-US':'es-CR')}`
+  ];
+  const content = lines.join('\n');
+
+  try{
+    const downloads = await claude.use('downloads');
+    if (downloads){ await downloads.save({ filename:'vvf-vcf-summary.txt', data: content }); return; }
+  }catch(e){ /* cae al fallback */ }
+
+  const w = window.open('', '_blank');
+  if (w){ w.document.write('<pre style="font-family:monospace;white-space:pre-wrap;padding:20px;">'+content.replace(/</g,'&lt;')+'</pre>'); }
+}
+
+/* ---------------- About modal ---------------- */
+function openAbout(){
+  document.getElementById('aboutOverlay').classList.add('open');
+  document.addEventListener('keydown', escCloseAbout);
+}
+function closeAbout(){
+  document.getElementById('aboutOverlay').classList.remove('open');
+  document.removeEventListener('keydown', escCloseAbout);
+}
+function escCloseAbout(e){ if (e.key==='Escape') closeAbout(); }
+function setLicTab(which){
+  document.querySelectorAll('.lic-tab').forEach(b=> b.classList.toggle('active', b.dataset.lic===which));
+  document.getElementById('licBoxMIT').style.display = which==='mit' ? 'block' : 'none';
+  document.getElementById('licBoxGPL').style.display = which==='gpl' ? 'block' : 'none';
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.scn-input').forEach(el=>{
+    el.style.cssText = 'width:100%; background:var(--surface-3); border:1px solid var(--gold-soft); border-radius:6px; color:var(--gold); font-family:var(--font-mono); font-size:0.8rem; padding:6px 9px; outline:none;';
+  });
+  document.querySelectorAll('.lic-tab').forEach(el=>{
+    el.style.cssText += 'flex:1;';
+  });
+  let savedLang = 'es';
+  try{ const s = localStorage.getItem('vvfvcf_lang'); if (s==='en' || s==='es') savedLang = s; }catch(e){}
+  lang = savedLang;
+  document.querySelectorAll('.lang-btn').forEach(b=> b.classList.toggle('active', b.dataset.lang===savedLang));
+  applyStaticI18n();
+  recalcAll();
+});
+</script>
