@@ -39,7 +39,7 @@ It ships with an English/Spanish language toggle, a Google search shortcut, and 
 Once you publish this repo, enable **GitHub Pages** (Settings → Pages → Deploy from branch → `main` / `root`) and your live URL will be:
 
 ```
-https://<your-github-username>.github.io/vvf-vcf9-planner/
+https://aeternax-suite.github.io/VCF-9-Planificador/
 ```
 
 A ready-made deploy workflow is already included at `.github/workflows/pages.yml` — it publishes automatically on every push to `main`.
@@ -60,8 +60,8 @@ A ready-made deploy workflow is already included at `.github/workflows/pages.yml
 ## 🚀 Quick start
 
 ```bash
-git clone https://github.com/<your-username>/vvf-vcf9-planner.git
-cd vvf-vcf9-planner
+git clone https://github.com/Aeternax-Suite/VCF-9-Planificador.git
+cd VCF-9-Planificador
 open index.html   # macOS — or just double-click it, or drag it into a browser tab
 ```
 

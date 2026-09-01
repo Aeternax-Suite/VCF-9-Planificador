@@ -17,4 +17,4 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Quick presets (small / medium / large cluster), print-to-PDF, plain-text export of the full calculation.
 - "About" panel with author information and dual MIT / GNU GPLv3 licensing.
 
-[1.0.0]: https://github.com/<your-username>/vvf-vcf9-planner/releases/tag/v1.0.0
+[1.0.0]: https://github.com/Aeternax-Suite/VCF-9-Planificador/releases/tag/v1.0.0
